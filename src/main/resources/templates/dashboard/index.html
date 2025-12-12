@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:include="layout :: layout">
+<body>
+    <th:block th:fragment="content">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1 class="page-title">
+                <i class="bi bi-speedometer2"></i>
+                Dashboard
+            </h1>
+            <button class="btn btn-secondary" onclick="location.reload()">
+                <i class="bi bi-arrow-clockwise"></i>
+                Refresh
+            </button>
+        </div>
+
+        <!-- 💰 Financial Summary Section -->
+        <div class="card mb-xl">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="bi bi-cash-stack"></i>
+                    Financial Summary
+                </h3>
+            </div>
+            <div class="card-body">
+                <!-- Financial Filters -->
+                <div style="margin-bottom: var(--spacing-lg); padding: var(--spacing-md); background-color: #F9FAFB; border-radius: 4px;">
+                    <form id="financialFilterForm" th:action="@{/dashboard}" method="get" style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: var(--spacing-md); align-items: end;">
+                        <!-- Preserve other section filters as hidden inputs -->
+                        <input type="hidden" name="attendanceEvent" th:value="${attendanceEvent}">
+                        <input type="hidden" name="attendanceCourse" th:value="${attendanceCourse}">
+                        <input type="hidden" name="attendanceYearLevel" th:value="${attendanceYearLevel}">
+                        <input type="hidden" name="attendanceSection" th:value="${attendanceSection}">
+                        <input type="hidden" name="serviceCourse" th:value="${serviceCourse}">
+                        <input type="hidden" name="serviceYearLevel" th:value="${serviceYearLevel}">
+                        <input type="hidden" name="serviceSection" th:value="${serviceSection}">
+                        
+                        <div class="form-group">
+                            <label class="form-label">Course</label>
+                            <select name="financialCourse" class="form-select" id="financialCourseSelect">
+                                <option value="all" th:selected="${financialCourse == 'all'}">All Courses</option>
+                                <option th:each="course : ${courses}" 
+                                        th:value="${course}" 
+                                        th:text="${course}"
+                                        th:selected="${financialCourse == course}">
+                                    Course
+                                </option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Year Level</label>
+                            <select name="financialYearLevel" class="form-select" id="financialYearLevelSelect">
+                                <option value="all" th:selected="${financialYearLevel == 'all'}">All Years</option>
+                                <option th:each="yl : ${yearLevels}" 
+                                        th:value="${yl}" 
+                                        th:text="${yl}"
+                                        th:selected="${financialYearLevel == yl}">
+                                    Year
+                                </option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Section</label>
+                            <select name="financialSection" class="form-select" id="financialSectionSelect">
+                                <option value="all" th:selected="${financialSection == 'all'}">All Sections</option>
+                                <option th:each="sec : ${sections}" 
+                                        th:value="${sec}" 
+                                        th:text="${sec}"
+                                        th:selected="${financialSection == sec}">
+                                    Section
+                                </option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <button type="button" class="btn btn-secondary" onclick="clearFinancialFilters()">Clear</button>
+                        </div>
+                    </form>
+                    <div style="margin-top: var(--spacing-sm); font-size: 0.875rem; color: #6B7280;">
+                        <i class="bi bi-info-circle"></i>
+                        Filters apply only to financial metrics below.
+                    </div>
+                    <script>
+                        document.getElementById('financialCourseSelect').addEventListener('change', function() {
+                            document.getElementById('financialFilterForm').submit();
+                        });
+                        document.getElementById('financialYearLevelSelect').addEventListener('change', function() {
+                            document.getElementById('financialFilterForm').submit();
+                        });
+                        document.getElementById('financialSectionSelect').addEventListener('change', function() {
+                            document.getElementById('financialFilterForm').submit();
+                        });
+                        function clearFinancialFilters() {
+                            const url = new URL(window.location.href);
+                            url.searchParams.set('financialCourse', 'all');
+                            url.searchParams.set('financialYearLevel', 'all');
+                            url.searchParams.set('financialSection', 'all');
+                            window.location.href = url.toString();
+                        }
+                    </script>
+                </div>
+                
+                <!-- Financial Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card" style="position: relative;">
+                        <div class="stat-label">
+                            Total Fines Issued
+                            <i class="bi bi-question-circle" style="margin-left: 4px; font-size: 0.875rem; color: #9CA3AF; cursor: help;" 
+                               title="Sum of all fines issued to students. This value does not include deductions from payments or service credits."></i>
+                        </div>
+                        <div class="stat-value" th:text="'₱' + ${#numbers.formatDecimal(totalFines, 1, 2)}">₱0.00</div>
+                    </div>
+                    <div class="stat-card" style="position: relative;">
+                        <div class="stat-label">
+                            Total Payments Collected
+                            <i class="bi bi-question-circle" style="margin-left: 4px; font-size: 0.875rem; color: #9CA3AF; cursor: help;" 
+                               title="Total amount of money collected from students as payments."></i>
+                        </div>
+                        <div class="stat-value primary" th:text="'₱' + ${#numbers.formatDecimal(totalPayments, 1, 2)}">₱0.00</div>
+                    </div>
+                    <div class="stat-card" style="position: relative;">
+                        <div class="stat-label">
+                            Total Service Credit Value
+                            <i class="bi bi-question-circle" style="margin-left: 4px; font-size: 0.875rem; color: #9CA3AF; cursor: help;" 
+                               title="Total monetary value of community service credits that offset fines."></i>
+                        </div>
+                        <div class="stat-value success" th:text="'₱' + ${#numbers.formatDecimal(totalServiceCredits, 1, 2)}">₱0.00</div>
+                    </div>
+                    <div class="stat-card" style="position: relative;" th:classappend="${outstandingBalance > 0} ? 'stat-card-warning' : 'stat-card-success'">
+                        <div class="stat-label">
+                            Outstanding Balance
+                            <i class="bi bi-question-circle" style="margin-left: 4px; font-size: 0.875rem; color: #9CA3AF; cursor: help;" 
+                               title="Remaining balance after deducting payments and service credits from total fines. Formula: Total Fines - Total Payments - Total Service Credits"></i>
+                        </div>
+                        <div class="stat-value" 
+                             th:classappend="${outstandingBalance > 0} ? 'error' : 'success'"
+                             th:text="'₱' + ${#numbers.formatDecimal(outstandingBalance, 1, 2)}">₱0.00</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 👥 Attendance Summary Section -->
+        <div class="card mb-xl">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="bi bi-people"></i>
+                    Attendance Summary
+                </h3>
+            </div>
+            <div class="card-body">
+                <!-- Attendance Filters -->
+                <div style="margin-bottom: var(--spacing-lg); padding: var(--spacing-md); background-color: #F9FAFB; border-radius: 4px;">
+                    <form id="attendanceFilterForm" th:action="@{/dashboard}" method="get" style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto; gap: var(--spacing-md); align-items: end;">
+                        <!-- Preserve other section filters as hidden inputs -->
+                        <input type="hidden" name="financialCourse" th:value="${financialCourse}">
+                        <input type="hidden" name="financialYearLevel" th:value="${financialYearLevel}">
+                        <input type="hidden" name="financialSection" th:value="${financialSection}">
+                        <input type="hidden" name="serviceCourse" th:value="${serviceCourse}">
+                        <input type="hidden" name="serviceYearLevel" th:value="${serviceYearLevel}">
+                        <input type="hidden" name="serviceSection" th:value="${serviceSection}">
+                        
+                        <div class="form-group">
+                            <label class="form-label">Event</label>
+                            <select name="attendanceEvent" class="form-select" id="attendanceEventSelect">
+                                <option value="all" th:selected="${attendanceEvent == 'all'}">All Events</option>
+                                <option th:each="event : ${allEvents}" 
+                                        th:value="${event.eventID}" 
+                                        th:text="${event.eventName + ' (' + event.eventID + ')'}"
+                                        th:selected="${attendanceEvent == event.eventID}">
+                                    Event
+                                </option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Course</label>
+                            <select name="attendanceCourse" class="form-select" id="attendanceCourseSelect">
+                                <option value="all" th:selected="${attendanceCourse == 'all'}">All Courses</option>
+                                <option th:each="course : ${courses}" 
+                                        th:value="${course}" 
+                                        th:text="${course}"
+                                        th:selected="${attendanceCourse == course}">
+                                    Course
+                                </option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Year Level</label>
+                            <select name="attendanceYearLevel" class="form-select" id="attendanceYearLevelSelect">
+                                <option value="all" th:selected="${attendanceYearLevel == 'all'}">All Years</option>
+                                <option th:each="yl : ${yearLevels}" 
+                                        th:value="${yl}" 
+                                        th:text="${yl}"
+                                        th:selected="${attendanceYearLevel == yl}">
+                                    Year
+                                </option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Section</label>
+                            <select name="attendanceSection" class="form-select" id="attendanceSectionSelect">
+                                <option value="all" th:selected="${attendanceSection == 'all'}">All Sections</option>
+                                <option th:each="sec : ${sections}" 
+                                        th:value="${sec}" 
+                                        th:text="${sec}"
+                                        th:selected="${attendanceSection == sec}">
+                                    Section
+                                </option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <button type="button" class="btn btn-secondary" onclick="clearAttendanceFilters()">Clear</button>
+                        </div>
+                    </form>
+                    <div style="margin-top: var(--spacing-sm); font-size: 0.875rem; color: #6B7280;">
+                        <i class="bi bi-info-circle"></i>
+                        Filters apply only to attendance metrics below.
+                    </div>
+                    <script>
+                        document.getElementById('attendanceEventSelect').addEventListener('change', function() {
+                            document.getElementById('attendanceFilterForm').submit();
+                        });
+                        document.getElementById('attendanceCourseSelect').addEventListener('change', function() {
+                            document.getElementById('attendanceFilterForm').submit();
+                        });
+                        document.getElementById('attendanceYearLevelSelect').addEventListener('change', function() {
+                            document.getElementById('attendanceFilterForm').submit();
+                        });
+                        document.getElementById('attendanceSectionSelect').addEventListener('change', function() {
+                            document.getElementById('attendanceFilterForm').submit();
+                        });
+                        function clearAttendanceFilters() {
+                            const url = new URL(window.location.href);
+                            url.searchParams.set('attendanceEvent', 'all');
+                            url.searchParams.set('attendanceCourse', 'all');
+                            url.searchParams.set('attendanceYearLevel', 'all');
+                            url.searchParams.set('attendanceSection', 'all');
+                            window.location.href = url.toString();
+                        }
+                    </script>
+                </div>
+                
+                <!-- Attendance Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card" style="position: relative;">
+                        <div class="stat-label">
+                            Present
+                            <i class="bi bi-question-circle" style="margin-left: 4px; font-size: 0.875rem; color: #9CA3AF; cursor: help;" 
+                               title="Number of unique students marked as present for the selected event(s)."></i>
+                        </div>
+                        <div class="stat-value success" th:text="${presentCount}">0</div>
+                    </div>
+                    <div class="stat-card" style="position: relative;">
+                        <div class="stat-label">
+                            Late
+                            <i class="bi bi-question-circle" style="margin-left: 4px; font-size: 0.875rem; color: #9CA3AF; cursor: help;" 
+                               title="Number of unique students marked as late for the selected event(s)."></i>
+                        </div>
+                        <div class="stat-value warning" th:text="${lateCount}">0</div>
+                    </div>
+                    <div class="stat-card" style="position: relative;">
+                        <div class="stat-label">
+                            Absent
+                            <i class="bi bi-question-circle" style="margin-left: 4px; font-size: 0.875rem; color: #9CA3AF; cursor: help;" 
+                               title="Number of unique students marked as absent for the selected event(s)."></i>
+                        </div>
+                        <div class="stat-value error" th:text="${absentCount}">0</div>
+                    </div>
+                    <div class="stat-card" style="position: relative;">
+                        <div class="stat-label">
+                            Half Absent
+                            <i class="bi bi-question-circle" style="margin-left: 4px; font-size: 0.875rem; color: #9CA3AF; cursor: help;" 
+                               title="Number of students who timed out without timing in. Fine is half of absent fine (₱50.00 if absent fine is ₱100.00)."></i>
+                        </div>
+                        <div class="stat-value warning">
+                            <span th:text="${totalHalfAbsent}">0</span>
+                            <span th:if="${totalHalfAbsent > 0}" 
+                                  th:text="' (AM: ' + ${halfAbsentAMCount} + ', PM: ' + ${halfAbsentPMCount} + ')'"></span>
+                        </div>
+                    </div>
+                </div>
+                <div th:if="${hasAttendanceEventFilter}" style="margin-top: var(--spacing-md); padding: var(--spacing-sm); background-color: #FEF3C7; border-radius: 4px; font-size: 0.875rem; color: #92400E;">
+                    <i class="bi bi-info-circle"></i>
+                    Attendance data shown for: <strong th:text="${selectedAttendanceEventName}">Event</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- 🛠 Community Service Summary Section -->
+        <div class="card mb-xl">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="bi bi-heart"></i>
+                    Community Service Summary
+                </h3>
+            </div>
+            <div class="card-body">
+                <!-- Community Service Filters -->
+                <div style="margin-bottom: var(--spacing-lg); padding: var(--spacing-md); background-color: #F9FAFB; border-radius: 4px;">
+                    <form id="serviceFilterForm" th:action="@{/dashboard}" method="get" style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: var(--spacing-md); align-items: end;">
+                        <!-- Preserve other section filters as hidden inputs -->
+                        <input type="hidden" name="financialCourse" th:value="${financialCourse}">
+                        <input type="hidden" name="financialYearLevel" th:value="${financialYearLevel}">
+                        <input type="hidden" name="financialSection" th:value="${financialSection}">
+                        <input type="hidden" name="attendanceEvent" th:value="${attendanceEvent}">
+                        <input type="hidden" name="attendanceCourse" th:value="${attendanceCourse}">
+                        <input type="hidden" name="attendanceYearLevel" th:value="${attendanceYearLevel}">
+                        <input type="hidden" name="attendanceSection" th:value="${attendanceSection}">
+                        
+                        <div class="form-group">
+                            <label class="form-label">Course</label>
+                            <select name="serviceCourse" class="form-select" id="serviceCourseSelect">
+                                <option value="all" th:selected="${serviceCourse == 'all'}">All Courses</option>
+                                <option th:each="course : ${courses}" 
+                                        th:value="${course}" 
+                                        th:text="${course}"
+                                        th:selected="${serviceCourse == course}">
+                                    Course
+                                </option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Year Level</label>
+                            <select name="serviceYearLevel" class="form-select" id="serviceYearLevelSelect">
+                                <option value="all" th:selected="${serviceYearLevel == 'all'}">All Years</option>
+                                <option th:each="yl : ${yearLevels}" 
+                                        th:value="${yl}" 
+                                        th:text="${yl}"
+                                        th:selected="${serviceYearLevel == yl}">
+                                    Year
+                                </option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Section</label>
+                            <select name="serviceSection" class="form-select" id="serviceSectionSelect">
+                                <option value="all" th:selected="${serviceSection == 'all'}">All Sections</option>
+                                <option th:each="sec : ${sections}" 
+                                        th:value="${sec}" 
+                                        th:text="${sec}"
+                                        th:selected="${serviceSection == sec}">
+                                    Section
+                                </option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <button type="button" class="btn btn-secondary" onclick="clearServiceFilters()">Clear</button>
+                        </div>
+                    </form>
+                    <div style="margin-top: var(--spacing-sm); font-size: 0.875rem; color: #6B7280;">
+                        <i class="bi bi-info-circle"></i>
+                        Filters apply only to community service metrics below.
+                    </div>
+                    <script>
+                        document.getElementById('serviceCourseSelect').addEventListener('change', function() {
+                            document.getElementById('serviceFilterForm').submit();
+                        });
+                        document.getElementById('serviceYearLevelSelect').addEventListener('change', function() {
+                            document.getElementById('serviceFilterForm').submit();
+                        });
+                        document.getElementById('serviceSectionSelect').addEventListener('change', function() {
+                            document.getElementById('serviceFilterForm').submit();
+                        });
+                        function clearServiceFilters() {
+                            const url = new URL(window.location.href);
+                            url.searchParams.set('serviceCourse', 'all');
+                            url.searchParams.set('serviceYearLevel', 'all');
+                            url.searchParams.set('serviceSection', 'all');
+                            window.location.href = url.toString();
+                        }
+                    </script>
+                </div>
+                
+                <!-- Community Service Stats -->
+                <div class="stats-grid">
+                    <div class="stat-card" style="position: relative;">
+                        <div class="stat-label">
+                            Total Service Hours
+                            <i class="bi bi-question-circle" style="margin-left: 4px; font-size: 0.875rem; color: #9CA3AF; cursor: help;" 
+                               title="Total number of community service hours rendered by all students."></i>
+                        </div>
+                        <div class="stat-value success" th:text="${totalServiceHours}">0</div>
+                    </div>
+                    <div class="stat-card" style="position: relative;">
+                        <div class="stat-label">
+                            Service Credit Value
+                            <i class="bi bi-question-circle" style="margin-left: 4px; font-size: 0.875rem; color: #9CA3AF; cursor: help;" 
+                               title="Total monetary value of community service credits. This value is used to offset fines in the outstanding balance calculation."></i>
+                        </div>
+                        <div class="stat-value success" th:text="'₱' + ${#numbers.formatDecimal(serviceCredits, 1, 2)}">₱0.00</div>
+                    </div>
+                    <div class="stat-card" style="position: relative;">
+                        <div class="stat-label">
+                            Students with Service
+                            <i class="bi bi-question-circle" style="margin-left: 4px; font-size: 0.875rem; color: #9CA3AF; cursor: help;" 
+                               title="Number of unique students who have rendered community service."></i>
+                        </div>
+                        <div class="stat-value" th:text="${serviceStudentCount}">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </th:block>
+</body>
+</html>

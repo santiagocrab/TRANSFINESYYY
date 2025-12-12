@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:include="layout :: layout">
+<body>
+    <th:block th:fragment="content">
+        <div class="page-header">
+            <h1 class="page-title">
+                <i class="bi bi-calendar-event"></i>
+                Events
+            </h1>
+            <a th:href="@{/events/create}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i>
+                Create Event
+            </a>
+        </div>
+
+        <div th:if="${successMessage}" class="alert alert-success">
+            <i class="bi bi-check-circle"></i>
+            <span th:text="${successMessage}"></span>
+        </div>
+        <div th:if="${errorMessage}" class="alert alert-error">
+            <i class="bi bi-exclamation-circle"></i>
+            <span th:text="${errorMessage}"></span>
+        </div>
+
+        <div class="card">
+            <div class="table-wrapper">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Event ID</th>
+                            <th>Event Name</th>
+                            <th>Date</th>
+                            <th>Semester</th>
+                            <th>School Year</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:if="${events.isEmpty()}">
+                            <td colspan="6" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">No events found.</td>
+                        </tr>
+                        <tr th:each="event : ${events}">
+                            <td th:text="${event.eventID}">EVT001</td>
+                            <td>
+                                <div style="display: flex; align-items: center; gap: var(--spacing-sm); flex-wrap: wrap;">
+                                    <span th:text="${event.eventName}">Event Name</span>
+                                    <span th:if="${event.finalized}" 
+                                          class="badge" 
+                                          style="background-color: #10B981; color: white; padding: 0.25rem 0.625rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.25rem; white-space: nowrap;">
+                                        <i class="bi bi-check-circle-fill" style="font-size: 0.875rem;"></i> Finalized
+                                    </span>
+                                </div>
+                            </td>
+                            <td th:text="${#temporals.format(event.eventDate, 'yyyy-MM-dd')}">2025-01-01</td>
+                            <td th:text="${event.semester ?: 'N/A'}">1</td>
+                            <td th:text="${event.schoolYear ?: 'N/A'}">2025-2026</td>
+                            <td>
+                                <div style="display: flex; gap: var(--spacing-sm);">
+                                    <!-- Edit Button - Hidden if finalized -->
+                                    <a th:if="${!event.finalized}" 
+                                       th:href="@{/events/edit/{id}(id=${event.eventID})}" 
+                                       class="btn btn-secondary btn-sm">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <!-- Attendance Button - Different text for finalized events -->
+                                    <a th:href="@{/attendance/event/{id}(id=${event.eventID})}" 
+                                       class="btn btn-primary btn-sm"
+                                       th:classappend="${event.finalized ? 'btn-success' : ''}">
+                                        <i th:class="${event.finalized ? 'bi bi-clock-history' : 'bi bi-clipboard-check'}"></i>
+                                        <span th:text="${event.finalized ? 'Check Attendance History' : 'Attendance'}">Attendance</span>
+                                    </a>
+                                    <!-- Delete Button - Hidden if finalized -->
+                                    <form th:if="${!event.finalized}" 
+                                          th:action="@{/events/delete/{id}(id=${event.eventID})}" 
+                                          method="post" 
+                                          style="display: inline;" 
+                                          onsubmit="return confirm('Are you sure?');">
+                                        <button type="submit" class="btn btn-secondary btn-sm" style="color: var(--error);">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </th:block>
+</body>
+</html>

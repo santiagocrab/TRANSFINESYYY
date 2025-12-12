@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:include="layout :: layout">
+<body>
+    <th:block th:fragment="content">
+        <div class="page-header">
+            <h1 class="page-title">
+                <i class="bi bi-check-circle"></i>
+                Clearance
+            </h1>
+            <a th:href="@{/clearance}" class="btn btn-secondary">
+                <i class="bi bi-arrow-clockwise"></i>
+                Refresh
+            </a>
+        </div>
+
+        <!-- Search and Filter -->
+        <div class="search-section mb-xl">
+            <form th:action="@{/clearance}" method="get" class="search-row">
+                <div class="form-group">
+                    <label class="form-label">Search By</label>
+                    <select name="searchType" class="form-select">
+                        <option value="All Fields" th:selected="${searchType == 'All Fields'}">All Fields</option>
+                        <option value="Student ID" th:selected="${searchType == 'Student ID'}">Student ID</option>
+                        <option value="Name" th:selected="${searchType == 'Name'}">Name</option>
+                        <option value="RFID Tag" th:selected="${searchType == 'RFID Tag'}">RFID Tag</option>
+                        <option value="Course" th:selected="${searchType == 'Course'}">Course</option>
+                        <option value="Year Level" th:selected="${searchType == 'Year Level'}">Year Level</option>
+                        <option value="Section" th:selected="${searchType == 'Section'}">Section</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Query</label>
+                    <input type="text" name="search" class="form-control" th:value="${search}" placeholder="Enter search term...">
+                </div>
+                <div class="form-group" style="width: 200px;">
+                    <label class="form-label">Filter by Status</label>
+                    <select name="filter" class="form-select">
+                        <option value="All" th:selected="${filter == 'All'}">All</option>
+                        <option value="CLEARED" th:selected="${filter == 'CLEARED'}">CLEARED</option>
+                        <option value="WITH BALANCE" th:selected="${filter == 'WITH BALANCE'}">WITH BALANCE</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                    <a th:href="@{/clearance}" class="btn btn-secondary" style="margin-left: var(--spacing-sm);">Clear</a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Clearance Table -->
+        <div class="card">
+            <div class="table-wrapper">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Student ID</th>
+                            <th>Name</th>
+                            <th>Course</th>
+                            <th>Balance</th>
+                            <th>Clearance Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:if="${students.isEmpty()}">
+                            <td colspan="5" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">No students found.</td>
+                        </tr>
+                        <tr th:each="student : ${students}">
+                            <td th:text="${student.studID}">STUD001</td>
+                            <td th:text="${student.fullName}">Student Name</td>
+                            <td th:text="${student.course}">BSIT</td>
+                            <td th:text="'₱' + ${#numbers.formatDecimal(balances.get(student.studID), 1, 2)}">₱0.00</td>
+                            <td>
+                                <span th:if="${clearanceStatuses.get(student.studID) == 'CLEARED'}" 
+                                      class="badge badge-success" 
+                                      th:text="${clearanceStatuses.get(student.studID)}">CLEARED</span>
+                                <span th:if="${clearanceStatuses.get(student.studID) == 'WITH BALANCE'}" 
+                                      class="badge badge-error" 
+                                      th:text="${clearanceStatuses.get(student.studID)}">WITH BALANCE</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </th:block>
+</body>
+</html>

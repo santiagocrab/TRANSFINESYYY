@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:include="layout :: layout">
+<body>
+    <th:block th:fragment="content">
+        <div class="page-header">
+            <h1 class="page-title">
+                <i class="bi bi-wallet2"></i>
+                Ledger & Transactions
+            </h1>
+        </div>
+
+        <div class="row" style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-xl);">
+            <!-- Left: Student Selection -->
+            <div>
+                <div class="card mb-lg">
+                    <div class="card-header">
+                        <h3 class="card-title">Select Student</h3>
+                    </div>
+                    <div class="card-body">
+                        <form th:action="@{/ledger}" method="get" class="search-row" style="grid-template-columns: 1fr;">
+                            <div class="form-group">
+                                <label class="form-label">Search By</label>
+                                <select name="searchType" class="form-select">
+                                    <option value="All Fields" th:selected="${searchType == 'All Fields'}">All Fields</option>
+                                    <option value="Student ID" th:selected="${searchType == 'Student ID'}">Student ID</option>
+                                    <option value="Name" th:selected="${searchType == 'Name'}">Name</option>
+                                    <option value="Course" th:selected="${searchType == 'Course'}">Course</option>
+                                    <option value="Year Level" th:selected="${searchType == 'Year Level'}">Year Level</option>
+                                    <option value="Section" th:selected="${searchType == 'Section'}">Section</option>
+                                    <option value="RFID Tag" th:selected="${searchType == 'RFID Tag'}">RFID Tag</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Query</label>
+                                <input type="text" name="search" class="form-control" th:value="${search}" placeholder="Enter search term...">
+                            </div>
+                            <div class="form-group">
+                                <button type="submit" class="btn btn-primary">Search</button>
+                                <a th:href="@{/ledger}" class="btn btn-secondary" style="margin-left: var(--spacing-sm);">Clear</a>
+                            </div>
+                        </form>
+                        <hr style="margin: var(--spacing-lg) 0;">
+                        <form th:action="@{/ledger}" method="get">
+                            <!-- Preserve search parameters -->
+                            <input type="hidden" name="search" th:value="${search}">
+                            <input type="hidden" name="searchType" th:value="${searchType}">
+                            <div class="form-group">
+                                <label class="form-label">Select Student</label>
+                                <select name="studentId" class="form-select" onchange="this.form.submit()">
+                                    <option value="">-- Select a student --</option>
+                                    <option th:each="student : ${students}" 
+                                            th:value="${student.studID}" 
+                                            th:text="${student.studID + ' - ' + student.fullName}"
+                                            th:selected="${selectedStudent != null && selectedStudent.studID == student.studID}">
+                                        Student
+                                    </option>
+                                </select>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Summary -->
+                <div class="card" th:if="${ledger != null}">
+                    <div class="card-header">
+                        <h3 class="card-title">Summary</h3>
+                    </div>
+                    <div class="card-body">
+                        <div style="margin-bottom: var(--spacing-lg);">
+                            <div class="stat-label">Total Fines</div>
+                            <div class="stat-value" th:text="'₱' + ${#numbers.formatDecimal(ledger.totalFines, 1, 2)}">₱0.00</div>
+                        </div>
+                        <div style="margin-bottom: var(--spacing-lg);">
+                            <div class="stat-label">Total Payments</div>
+                            <div class="stat-value success" th:text="'₱' + ${#numbers.formatDecimal(ledger.totalPayments, 1, 2)}">₱0.00</div>
+                        </div>
+                        <div style="margin-bottom: var(--spacing-lg);">
+                            <div class="stat-label">Total Credits</div>
+                            <div class="stat-value success" th:text="'₱' + ${#numbers.formatDecimal(ledger.totalCredits, 1, 2)}">₱0.00</div>
+                        </div>
+                        <hr>
+                        <div style="margin-bottom: var(--spacing-lg);">
+                            <div class="stat-label">Balance</div>
+                            <div class="stat-value" 
+                                 th:classappend="${ledger.balance <= 0} ? 'success' : 'error'"
+                                 th:text="'₱' + ${#numbers.formatDecimal(ledger.balance, 1, 2)}">₱0.00</div>
+                        </div>
+                        <div>
+                            <div class="stat-label">Clearance Status</div>
+                            <div>
+                                <span th:if="${clearanceStatus.contains('CLEARED')}" class="badge badge-success" th:text="${clearanceStatus}">CLEARED</span>
+                                <span th:if="${!clearanceStatus.contains('CLEARED')}" class="badge badge-error" th:text="${clearanceStatus}">WITH BALANCE</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Transaction History -->
+            <div>
+                <div class="card" th:if="${ledger != null}">
+                    <div class="card-header">
+                        <h3 class="card-title">Transaction History</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-wrapper">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Type</th>
+                                        <th>Amount</th>
+                                        <th>Signed Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:if="${ledger.transactionHistory.isEmpty()}">
+                                        <td colspan="4" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">No transactions found.</td>
+                                    </tr>
+                                    <tr th:each="txn : ${ledger.transactionHistory}">
+                                        <td th:text="${#temporals.format(txn.date, 'yyyy-MM-dd')}">2025-01-01</td>
+                                        <td>
+                                            <span th:if="${txn.getClass().getSimpleName() == 'Fine'}" class="badge badge-error">Fine</span>
+                                            <span th:if="${txn.getClass().getSimpleName() == 'Payment'}" class="badge badge-success">Payment</span>
+                                            <span th:if="${txn.getClass().getSimpleName() != 'Fine' && txn.getClass().getSimpleName() != 'Payment'}" class="badge badge-info">Service Credit</span>
+                                        </td>
+                                        <td th:text="'₱' + ${#numbers.formatDecimal(txn.amount, 1, 2)}">₱0.00</td>
+                                        <td th:text="'₱' + ${#numbers.formatDecimal(txn.signedAmount, 1, 2)}">₱0.00</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </th:block>
+</body>
+</html>
