@@ -1,6 +1,8 @@
 package com.transfinesy.web;
 
 import com.transfinesy.model.Student;
+import com.transfinesy.service.FineService;
+import com.transfinesy.service.LedgerService;
 import com.transfinesy.service.StudentService;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -16,9 +18,13 @@ import java.util.Map;
 public class StudentController {
 
     private final StudentService studentService;
+    private final FineService fineService;
+    private final LedgerService ledgerService;
 
-    public StudentController(StudentService studentService) {
+    public StudentController(StudentService studentService, FineService fineService, LedgerService ledgerService) {
         this.studentService = studentService;
+        this.fineService = fineService;
+        this.ledgerService = ledgerService;
     }
 
     @GetMapping
@@ -85,9 +91,31 @@ public class StudentController {
 
         students = studentService.sortStudents(students, sortBy, sortOrder);
 
+        // Get fines and balances for all students
+        Map<String, Double> totalFinesMap = new HashMap<>();
+        Map<String, Double> balancesMap = new HashMap<>();
+        
+        for (Student student : students) {
+            try {
+                List<com.transfinesy.model.Fine> fines = fineService.getFinesByStudent(student.getStudID());
+                double totalFines = fines.stream()
+                    .mapToDouble(com.transfinesy.model.Fine::getFineAmount)
+                    .sum();
+                totalFinesMap.put(student.getStudID(), totalFines);
+                
+                double balance = ledgerService.getBalanceForStudent(student.getStudID());
+                balancesMap.put(student.getStudID(), balance);
+            } catch (Exception e) {
+                totalFinesMap.put(student.getStudID(), 0.0);
+                balancesMap.put(student.getStudID(), 0.0);
+            }
+        }
+
         model.addAttribute("pageTitle", "Students");
         model.addAttribute("activePage", "students");
         model.addAttribute("students", students);
+        model.addAttribute("totalFinesMap", totalFinesMap);
+        model.addAttribute("balancesMap", balancesMap);
         model.addAttribute("search", search);
         model.addAttribute("searchType", searchType);
         model.addAttribute("sortBy", sortBy);

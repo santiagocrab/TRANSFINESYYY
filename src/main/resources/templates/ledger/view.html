@@ -98,6 +98,46 @@
 
             <!-- Right: Transaction History -->
             <div>
+                <!-- Fines Detail Section -->
+                <div class="card mb-lg" th:if="${ledger != null && studentFines != null && !studentFines.isEmpty()}" style="display: block;">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            Fines Details
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-wrapper">
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Event</th>
+                                        <th>Fine ID</th>
+                                        <th>Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:each="fine : ${studentFines}" 
+                                        th:with="event=${eventMap.get(fine.eventID)}">
+                                        <td th:text="${#temporals.format(fine.date, 'yyyy-MM-dd')}">2025-01-01</td>
+                                        <td>
+                                            <span th:if="${event != null}" th:text="${event.eventName + ' (' + event.eventID + ')'}">Event Name</span>
+                                            <span th:if="${event == null}" th:text="${fine.eventID}" style="color: #6B7280;">Event ID</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge badge-error" th:text="${fine.fineID}">FINE-001</span>
+                                        </td>
+                                        <td style="font-weight: 600; color: var(--error);">
+                                            ₱<span th:text="${#numbers.formatDecimal(fine.fineAmount, 1, 2)}">0.00</span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card" th:if="${ledger != null}">
                     <div class="card-header">
                         <h3 class="card-title">Transaction History</h3>
@@ -109,13 +149,14 @@
                                     <tr>
                                         <th>Date</th>
                                         <th>Type</th>
+                                        <th>Description</th>
                                         <th>Amount</th>
                                         <th>Signed Amount</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr th:if="${ledger.transactionHistory.isEmpty()}">
-                                        <td colspan="4" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">No transactions found.</td>
+                                        <td colspan="5" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">No transactions found.</td>
                                     </tr>
                                     <tr th:each="txn : ${ledger.transactionHistory}">
                                         <td th:text="${#temporals.format(txn.date, 'yyyy-MM-dd')}">2025-01-01</td>
@@ -123,6 +164,20 @@
                                             <span th:if="${txn.getClass().getSimpleName() == 'Fine'}" class="badge badge-error">Fine</span>
                                             <span th:if="${txn.getClass().getSimpleName() == 'Payment'}" class="badge badge-success">Payment</span>
                                             <span th:if="${txn.getClass().getSimpleName() != 'Fine' && txn.getClass().getSimpleName() != 'Payment'}" class="badge badge-info">Service Credit</span>
+                                        </td>
+                                        <td>
+                                            <span th:if="${txn.getClass().getSimpleName() == 'Fine'}" 
+                                                  th:with="fine=${txn}, event=${eventMap.get(fine.eventID)}">
+                                                <span th:if="${event != null}" th:text="'Event: ' + event.eventName">Event</span>
+                                                <span th:if="${event == null}" th:text="'Event: ' + fine.eventID">Event</span>
+                                            </span>
+                                            <span th:if="${txn.getClass().getSimpleName() == 'Payment'}" 
+                                                  th:with="payment=${txn}">
+                                                <span th:text="${payment.description ?: 'Payment'}">Payment</span>
+                                            </span>
+                                            <span th:if="${txn.getClass().getSimpleName() != 'Fine' && txn.getClass().getSimpleName() != 'Payment'}">
+                                                <span th:with="payment=${txn}" th:text="${payment.description ?: 'Service Credit'}">Service Credit</span>
+                                            </span>
                                         </td>
                                         <td th:text="'₱' + ${#numbers.formatDecimal(txn.amount, 1, 2)}">₱0.00</td>
                                         <td th:text="'₱' + ${#numbers.formatDecimal(txn.signedAmount, 1, 2)}">₱0.00</td>

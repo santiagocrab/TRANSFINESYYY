@@ -411,5 +411,52 @@ public class AttendanceRepositoryImpl implements AttendanceRepository {
 
         return counts;
     }
+    
+    @Override
+    public Map<String, Long> countTotalAttendanceRecordsByStatus() {
+        Map<String, Long> counts = new HashMap<>();
+        
+        // First, get total count of all records to verify
+        String totalSql = "SELECT COUNT(*) as total FROM attendance";
+        long totalRecordsInDB = 0;
+        try (Connection conn = DBConfig.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(totalSql);
+             ResultSet rs = pstmt.executeQuery()) {
+            if (rs.next()) {
+                totalRecordsInDB = rs.getLong("total");
+            }
+        } catch (SQLException e) {
+            System.err.println("ERROR getting total records: " + e.getMessage());
+        }
+        
+        String sql = "SELECT status, COUNT(*) as count " +
+                     "FROM attendance " +
+                     "GROUP BY status";
+
+        System.out.println("=== COUNTING TOTAL ATTENDANCE RECORDS BY STATUS ===");
+        System.out.println("TOTAL RECORDS IN DATABASE: " + totalRecordsInDB);
+        System.out.println("SQL: " + sql);
+
+        try (Connection conn = DBConfig.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            ResultSet rs = pstmt.executeQuery();
+            long totalRecords = 0;
+            while (rs.next()) {
+                String status = rs.getString("status");
+                long count = rs.getLong("count");
+                counts.put(status, count);
+                totalRecords += count;
+                System.out.println("  Status: " + status + " = " + count + " records");
+            }
+            System.out.println("  TOTAL RECORDS COUNTED BY STATUS: " + totalRecords);
+            System.out.println("================================================");
+        } catch (SQLException e) {
+            System.err.println("ERROR counting attendance records: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return counts;
+    }
 }
 

@@ -3,13 +3,16 @@ package com.transfinesy.web;
 import com.transfinesy.model.AttendanceSession;
 import com.transfinesy.model.Event;
 import com.transfinesy.service.EventService;
+import com.transfinesy.service.FineService;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Controller
@@ -17,17 +20,43 @@ import java.util.UUID;
 public class EventController {
 
     private final EventService eventService;
+    private final FineService fineService;
 
-    public EventController(EventService eventService) {
+    public EventController(EventService eventService, FineService fineService) {
         this.eventService = eventService;
+        this.fineService = fineService;
     }
 
     @GetMapping
     public String listEvents(Model model) {
         List<Event> events = eventService.getAllEvents();
+        
+        // Get total fines for each event
+        Map<String, Double> eventFinesMap = new HashMap<>();
+        for (Event event : events) {
+            try {
+                List<com.transfinesy.model.Fine> fines = fineService.getFinesByEvent(event.getEventID());
+                double totalFines = fines.stream()
+                    .mapToDouble(com.transfinesy.model.Fine::getFineAmount)
+                    .sum();
+                eventFinesMap.put(event.getEventID(), totalFines);
+                
+                // Debug logging
+                if (event.isFinalized() && totalFines == 0.0 && fines.isEmpty()) {
+                    System.out.println("⚠ WARNING: Event " + event.getEventID() + " (" + event.getEventName() + ") is finalized but has NO fines in database!");
+                } else if (event.isFinalized()) {
+                    System.out.println("✓ Event " + event.getEventID() + " has " + fines.size() + " fines, total: ₱" + totalFines);
+                }
+            } catch (Exception e) {
+                System.err.println("Error getting fines for event " + event.getEventID() + ": " + e.getMessage());
+                eventFinesMap.put(event.getEventID(), 0.0);
+            }
+        }
+        
         model.addAttribute("pageTitle", "Events & Attendance");
         model.addAttribute("activePage", "events");
         model.addAttribute("events", events);
+        model.addAttribute("eventFinesMap", eventFinesMap);
         return "events/list";
     }
 

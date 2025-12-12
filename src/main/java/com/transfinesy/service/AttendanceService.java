@@ -13,6 +13,7 @@ import com.transfinesy.repo.EventRepositoryImpl;
 import com.transfinesy.repo.StudentRepository;
 import com.transfinesy.repo.StudentRepositoryImpl;
 import com.transfinesy.service.RFIDService;
+import com.transfinesy.util.CheckpointAttendanceCalculator;
 import com.transfinesy.util.Queue;
 import org.springframework.stereotype.Service;
 
@@ -43,6 +44,9 @@ public class AttendanceService {
         this.studentRepository = new StudentRepositoryImpl();
         this.rfidService = new RFIDService();
         this.scanQueue = new Queue<>();
+        // Initialize fineService and ledgerService if not injected
+        this.fineService = new FineService();
+        this.ledgerService = new LedgerService();
     }
 
     private static class AttendanceScanRequest {
@@ -122,9 +126,8 @@ public class AttendanceService {
             throw new IllegalArgumentException("Event not found: " + eventID);
         }
 
-        if (event.isFinalized()) {
-            throw new IllegalStateException("Event is already finalized. No further attendance can be recorded.");
-        }
+        // Allow re-finalization if we're just regenerating fines
+        boolean isAlreadyFinalized = event.isFinalized();
 
         List<Student> allStudents = studentRepository.findAll();
         List<Attendance> existingAttendance = repository.findByEvent(eventID);
@@ -132,27 +135,190 @@ public class AttendanceService {
             .map(Attendance::getStudID)
             .collect(Collectors.toSet());
 
-        for (Student student : allStudents) {
-            if (!studentsWithAttendance.contains(student.getStudID())) {
-                String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-                Attendance absentAttendance = new Attendance(
-                    attendanceID,
-                    student.getStudID(),
-                    eventID,
-                    AttendanceStatus.ABSENT,
-                    0,
-                    null,
-                    null,
-                    "MANUAL"
-                );
-                repository.save(absentAttendance);
+        // Create checkpoint records for each student based on event sessionType
+        if (!isAlreadyFinalized && event.getSessionType() != null) {
+            for (Student student : allStudents) {
+                String studID = student.getStudID();
+                
+                // Get existing attendance records for this student and event
+                List<Attendance> studentAttendances = existingAttendance.stream()
+                    .filter(a -> a.getStudID().equals(studID))
+                    .collect(Collectors.toList());
+                
+                // Determine which checkpoints to create based on sessionType
+                switch (event.getSessionType()) {
+                    case MORNING_ONLY:
+                        // Create AM Time-In and AM Time-Out checkpoints
+                        boolean hasAMTimeIn = studentAttendances.stream()
+                            .anyMatch(a -> "AM".equalsIgnoreCase(a.getSession()) && "TIME_IN".equals(a.getRecordType()));
+                        boolean hasAMTimeOut = studentAttendances.stream()
+                            .anyMatch(a -> "AM".equalsIgnoreCase(a.getSession()) && "TIME_OUT".equals(a.getRecordType()));
+                        
+                        if (!hasAMTimeIn) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("AM");
+                            absentRecord.setRecordType("TIME_IN");
+                            repository.save(absentRecord);
+                        }
+                        
+                        if (!hasAMTimeOut) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("AM");
+                            absentRecord.setRecordType("TIME_OUT");
+                            repository.save(absentRecord);
+                        }
+                        break;
+                        
+                    case AFTERNOON_ONLY:
+                        // Create PM Time-In and PM Time-Out checkpoints
+                        boolean hasPMTimeIn = studentAttendances.stream()
+                            .anyMatch(a -> "PM".equalsIgnoreCase(a.getSession()) && "TIME_IN".equals(a.getRecordType()));
+                        boolean hasPMTimeOut = studentAttendances.stream()
+                            .anyMatch(a -> "PM".equalsIgnoreCase(a.getSession()) && "TIME_OUT".equals(a.getRecordType()));
+                        
+                        if (!hasPMTimeIn) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("PM");
+                            absentRecord.setRecordType("TIME_IN");
+                            repository.save(absentRecord);
+                        }
+                        
+                        if (!hasPMTimeOut) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("PM");
+                            absentRecord.setRecordType("TIME_OUT");
+                            repository.save(absentRecord);
+                        }
+                        break;
+                        
+                    case BOTH:
+                        // Create all 4 checkpoints: AM Time-In, AM Time-Out, PM Time-In, PM Time-Out
+                        boolean hasAMTimeInBoth = studentAttendances.stream()
+                            .anyMatch(a -> "AM".equalsIgnoreCase(a.getSession()) && "TIME_IN".equals(a.getRecordType()));
+                        boolean hasAMTimeOutBoth = studentAttendances.stream()
+                            .anyMatch(a -> "AM".equalsIgnoreCase(a.getSession()) && "TIME_OUT".equals(a.getRecordType()));
+                        boolean hasPMTimeInBoth = studentAttendances.stream()
+                            .anyMatch(a -> "PM".equalsIgnoreCase(a.getSession()) && "TIME_IN".equals(a.getRecordType()));
+                        boolean hasPMTimeOutBoth = studentAttendances.stream()
+                            .anyMatch(a -> "PM".equalsIgnoreCase(a.getSession()) && "TIME_OUT".equals(a.getRecordType()));
+                        
+                        if (!hasAMTimeInBoth) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("AM");
+                            absentRecord.setRecordType("TIME_IN");
+                            repository.save(absentRecord);
+                        }
+                        
+                        if (!hasAMTimeOutBoth) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("AM");
+                            absentRecord.setRecordType("TIME_OUT");
+                            repository.save(absentRecord);
+                        }
+                        
+                        if (!hasPMTimeInBoth) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("PM");
+                            absentRecord.setRecordType("TIME_IN");
+                            repository.save(absentRecord);
+                        }
+                        
+                        if (!hasPMTimeOutBoth) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("PM");
+                            absentRecord.setRecordType("TIME_OUT");
+                            repository.save(absentRecord);
+                        }
+                        break;
+                }
             }
         }
 
         List<Attendance> allAttendance = repository.findByEvent(eventID);
         
-        if (fineService != null) {
-            fineService.generateFinesFromAttendances(allAttendance, eventID, event);
+        // Ensure fineService is initialized
+        if (fineService == null) {
+            System.err.println("⚠ WARNING: FineService is NULL! Initializing new instance...");
+            fineService = new FineService();
+        }
+        
+        if (ledgerService == null) {
+            ledgerService = new LedgerService();
+        }
+        
+        if (event == null) {
+            System.err.println("✗ CRITICAL: Event is NULL! Cannot generate fines!");
+            throw new IllegalStateException("Event is null. Cannot finalize event.");
+        }
+        
+        // Force regeneration of fines for all students in this event
+        // Delete existing fines for this event first to ensure fresh generation
+        List<com.transfinesy.model.Fine> existingFines = fineService.getFinesByEvent(eventID);
+        System.out.println("========================================");
+        System.out.println("FINALIZING EVENT: " + eventID);
+        System.out.println("Event Name: " + event.getEventName());
+        System.out.println("Session Type: " + (event.getSessionType() != null ? event.getSessionType() : "NULL"));
+        System.out.println("Total Checkpoints: " + com.transfinesy.util.CheckpointAttendanceCalculator.getTotalCheckpoints(event));
+        System.out.println("Fine Amount Absent: " + (event.getFineAmountAbsent() != null ? event.getFineAmountAbsent() : "DEFAULT (100.0)"));
+        System.out.println("Fine Amount Late: " + (event.getFineAmountLate() != null ? event.getFineAmountLate() : "DEFAULT (2.0/min)"));
+        System.out.println("Total attendance records: " + allAttendance.size());
+        System.out.println("Deleting " + existingFines.size() + " existing fines for event " + eventID);
+        System.out.println("========================================");
+        
+        for (com.transfinesy.model.Fine existingFine : existingFines) {
+            try {
+                fineService.deleteFine(existingFine.getFineID());
+            } catch (Exception e) {
+                System.err.println("Error deleting existing fine: " + e.getMessage());
+            }
+        }
+        
+        // Now generate fines for all students
+        System.out.println("Generating fines for " + allAttendance.size() + " attendance records for event " + eventID);
+        fineService.generateFinesFromAttendances(allAttendance, eventID, event);
+        
+        // Verify fines were created - wait a moment for database to update
+        try {
+            Thread.sleep(100); // Small delay to ensure database commit
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        List<com.transfinesy.model.Fine> createdFines = fineService.getFinesByEvent(eventID);
+        System.out.println("========================================");
+        System.out.println("VERIFICATION:");
+        System.out.println("Created " + createdFines.size() + " fines for event " + eventID);
+        double totalFines = createdFines.stream().mapToDouble(com.transfinesy.model.Fine::getFineAmount).sum();
+        System.out.println("Total fines amount: ₱" + totalFines);
+        System.out.println("========================================");
+        
+        if (createdFines.isEmpty() && !allAttendance.isEmpty()) {
+            System.err.println("⚠ WARNING: No fines were created but attendance records exist!");
+            System.err.println("This might indicate a problem with fine generation logic.");
         }
         
         java.util.Set<String> allStudentIDs = allAttendance.stream()
@@ -165,9 +331,200 @@ public class AttendanceService {
             }
         }
 
-        // Mark event as finalized
-        event.setFinalized(true);
-        eventRepository.update(event);
+        // Mark event as finalized (if not already)
+        if (!isAlreadyFinalized) {
+            event.setFinalized(true);
+            eventRepository.update(event);
+        }
+    }
+    
+    public void regenerateFinesForEvent(String eventID) {
+        Event event = eventRepository.findById(eventID);
+        if (event == null) {
+            throw new IllegalArgumentException("Event not found: " + eventID);
+        }
+        
+        // Ensure fineService is initialized
+        if (fineService == null) {
+            System.err.println("⚠ WARNING: FineService is NULL! Initializing new instance...");
+            fineService = new FineService();
+        }
+        
+        List<Student> allStudents = studentRepository.findAll();
+        List<Attendance> allAttendance = repository.findByEvent(eventID);
+        
+        // Ensure all students have checkpoint records based on event sessionType
+        int totalCheckpoints = com.transfinesy.util.CheckpointAttendanceCalculator.getTotalCheckpoints(event);
+        System.out.println("Ensuring all students have " + totalCheckpoints + " checkpoint records for session type: " + 
+                         (event.getSessionType() != null ? event.getSessionType() : "NULL"));
+        
+        for (Student student : allStudents) {
+            String studID = student.getStudID();
+            
+            List<Attendance> studentAttendances = allAttendance.stream()
+                .filter(a -> a.getStudID().equals(studID))
+                .collect(Collectors.toList());
+            
+            // Create missing checkpoints based on sessionType
+            if (event.getSessionType() != null) {
+                switch (event.getSessionType()) {
+                    case MORNING_ONLY:
+                        boolean hasAMTimeIn = studentAttendances.stream()
+                            .anyMatch(a -> "AM".equalsIgnoreCase(a.getSession()) && "TIME_IN".equals(a.getRecordType()));
+                        boolean hasAMTimeOut = studentAttendances.stream()
+                            .anyMatch(a -> "AM".equalsIgnoreCase(a.getSession()) && "TIME_OUT".equals(a.getRecordType()));
+                        
+                        if (!hasAMTimeIn) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("AM");
+                            absentRecord.setRecordType("TIME_IN");
+                            repository.save(absentRecord);
+                            allAttendance.add(absentRecord);
+                        }
+                        
+                        if (!hasAMTimeOut) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("AM");
+                            absentRecord.setRecordType("TIME_OUT");
+                            repository.save(absentRecord);
+                            allAttendance.add(absentRecord);
+                        }
+                        break;
+                        
+                    case AFTERNOON_ONLY:
+                        boolean hasPMTimeIn = studentAttendances.stream()
+                            .anyMatch(a -> "PM".equalsIgnoreCase(a.getSession()) && "TIME_IN".equals(a.getRecordType()));
+                        boolean hasPMTimeOut = studentAttendances.stream()
+                            .anyMatch(a -> "PM".equalsIgnoreCase(a.getSession()) && "TIME_OUT".equals(a.getRecordType()));
+                        
+                        if (!hasPMTimeIn) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("PM");
+                            absentRecord.setRecordType("TIME_IN");
+                            repository.save(absentRecord);
+                            allAttendance.add(absentRecord);
+                        }
+                        
+                        if (!hasPMTimeOut) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("PM");
+                            absentRecord.setRecordType("TIME_OUT");
+                            repository.save(absentRecord);
+                            allAttendance.add(absentRecord);
+                        }
+                        break;
+                        
+                    case BOTH:
+                        boolean hasAMTimeInBoth = studentAttendances.stream()
+                            .anyMatch(a -> "AM".equalsIgnoreCase(a.getSession()) && "TIME_IN".equals(a.getRecordType()));
+                        boolean hasAMTimeOutBoth = studentAttendances.stream()
+                            .anyMatch(a -> "AM".equalsIgnoreCase(a.getSession()) && "TIME_OUT".equals(a.getRecordType()));
+                        boolean hasPMTimeInBoth = studentAttendances.stream()
+                            .anyMatch(a -> "PM".equalsIgnoreCase(a.getSession()) && "TIME_IN".equals(a.getRecordType()));
+                        boolean hasPMTimeOutBoth = studentAttendances.stream()
+                            .anyMatch(a -> "PM".equalsIgnoreCase(a.getSession()) && "TIME_OUT".equals(a.getRecordType()));
+                        
+                        if (!hasAMTimeInBoth) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("AM");
+                            absentRecord.setRecordType("TIME_IN");
+                            repository.save(absentRecord);
+                            allAttendance.add(absentRecord);
+                        }
+                        
+                        if (!hasAMTimeOutBoth) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("AM");
+                            absentRecord.setRecordType("TIME_OUT");
+                            repository.save(absentRecord);
+                            allAttendance.add(absentRecord);
+                        }
+                        
+                        if (!hasPMTimeInBoth) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("PM");
+                            absentRecord.setRecordType("TIME_IN");
+                            repository.save(absentRecord);
+                            allAttendance.add(absentRecord);
+                        }
+                        
+                        if (!hasPMTimeOutBoth) {
+                            String attendanceID = "ATT-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                            Attendance absentRecord = new Attendance(
+                                attendanceID, studID, eventID, AttendanceStatus.ABSENT, 0, null, null, "MANUAL"
+                            );
+                            absentRecord.setSession("PM");
+                            absentRecord.setRecordType("TIME_OUT");
+                            repository.save(absentRecord);
+                            allAttendance.add(absentRecord);
+                        }
+                        break;
+                }
+            }
+        }
+        
+        // Delete existing fines for this event
+        List<com.transfinesy.model.Fine> existingFines = fineService.getFinesByEvent(eventID);
+        System.out.println("========================================");
+        System.out.println("REGENERATING FINES FOR EVENT: " + eventID);
+        System.out.println("Event Name: " + event.getEventName());
+        System.out.println("Fine Amount Absent: " + (event.getFineAmountAbsent() != null ? event.getFineAmountAbsent() : "DEFAULT (100.0)"));
+        System.out.println("Total attendance records: " + allAttendance.size());
+        System.out.println("Deleting " + existingFines.size() + " existing fines for event " + eventID);
+        System.out.println("========================================");
+        
+        for (com.transfinesy.model.Fine existingFine : existingFines) {
+            try {
+                fineService.deleteFine(existingFine.getFineID());
+            } catch (Exception e) {
+                System.err.println("Error deleting existing fine: " + e.getMessage());
+            }
+        }
+        
+        // Generate fines for all students using checkpoint-based calculation
+        System.out.println("Regenerating fines for " + allAttendance.size() + " attendance records for event " + eventID);
+        fineService.generateFinesFromAttendances(allAttendance, eventID, event);
+        
+        // Verify fines were created - wait a moment for database to update
+        try {
+            Thread.sleep(100); // Small delay to ensure database commit
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        
+        List<com.transfinesy.model.Fine> createdFines = fineService.getFinesByEvent(eventID);
+        System.out.println("========================================");
+        System.out.println("VERIFICATION:");
+        System.out.println("Regenerated " + createdFines.size() + " fines for event " + eventID);
+        double totalFines = createdFines.stream().mapToDouble(com.transfinesy.model.Fine::getFineAmount).sum();
+        System.out.println("Total fines amount: ₱" + totalFines);
+        System.out.println("========================================");
+        
+        if (createdFines.isEmpty() && !allAttendance.isEmpty()) {
+            System.err.println("⚠ WARNING: No fines were created but attendance records exist!");
+            System.err.println("This might indicate a problem with fine generation logic.");
+        }
     }
 
     public void finalizeAttendanceAndGenerateFines(String eventID) {
@@ -214,6 +571,10 @@ public class AttendanceService {
 
     public Map<String, Long> getAttendanceCountsByStatusFiltered(String eventId, String course, String yearLevel, String section) {
         return repository.countUniqueStudentsByStatusFiltered(eventId, course, yearLevel, section);
+    }
+    
+    public Map<String, Long> getTotalAttendanceRecordsByStatus() {
+        return repository.countTotalAttendanceRecordsByStatus();
     }
 
     public void saveAttendanceBatch(List<Attendance> attendances) {

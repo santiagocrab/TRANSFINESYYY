@@ -1,15 +1,21 @@
 package com.transfinesy.web;
 
+import com.transfinesy.model.Fine;
 import com.transfinesy.model.Ledger;
 import com.transfinesy.model.Student;
+import com.transfinesy.model.Event;
 import com.transfinesy.service.ClearanceService;
+import com.transfinesy.service.EventService;
+import com.transfinesy.service.FineService;
 import com.transfinesy.service.LedgerService;
 import com.transfinesy.service.StudentService;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Controller
 @RequestMapping("/ledger")
@@ -18,11 +24,15 @@ public class LedgerController {
     private final LedgerService ledgerService;
     private final ClearanceService clearanceService;
     private final StudentService studentService;
+    private final FineService fineService;
+    private final EventService eventService;
 
-    public LedgerController(LedgerService ledgerService, ClearanceService clearanceService, StudentService studentService) {
+    public LedgerController(LedgerService ledgerService, ClearanceService clearanceService, StudentService studentService, FineService fineService, EventService eventService) {
         this.ledgerService = ledgerService;
         this.clearanceService = clearanceService;
         this.studentService = studentService;
+        this.fineService = fineService;
+        this.eventService = eventService;
     }
 
     @GetMapping
@@ -71,6 +81,8 @@ public class LedgerController {
         Ledger ledger = null;
         String clearanceStatus = "-";
         Student selectedStudent = null;
+        List<Fine> studentFines = new java.util.ArrayList<>();
+        Map<String, Event> eventMap = new HashMap<>();
 
         if (studentId != null && !studentId.trim().isEmpty()) {
             selectedStudent = studentService.getStudentById(studentId);
@@ -79,6 +91,22 @@ public class LedgerController {
             } else {
                 ledger = ledgerService.getLedgerForStudent(studentId);
                 clearanceStatus = clearanceService.getClearanceStatusWithBalance(selectedStudent);
+                
+                // Get all fines for this student
+                studentFines = fineService.getFinesByStudent(studentId);
+                if (studentFines == null) {
+                    studentFines = new java.util.ArrayList<>();
+                }
+                
+                // Get event information for each fine
+                for (Fine fine : studentFines) {
+                    if (fine != null && fine.getEventID() != null && !eventMap.containsKey(fine.getEventID())) {
+                        Event event = eventService.getEventById(fine.getEventID());
+                        if (event != null) {
+                            eventMap.put(fine.getEventID(), event);
+                        }
+                    }
+                }
             }
         }
 
@@ -92,6 +120,8 @@ public class LedgerController {
         model.addAttribute("selectedStudent", selectedStudent);
         model.addAttribute("ledger", ledger);
         model.addAttribute("clearanceStatus", clearanceStatus);
+        model.addAttribute("studentFines", studentFines);
+        model.addAttribute("eventMap", eventMap);
         model.addAttribute("search", search);
         model.addAttribute("searchType", searchType);
 

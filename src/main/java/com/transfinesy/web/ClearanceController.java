@@ -1,7 +1,11 @@
 package com.transfinesy.web;
 
+import com.transfinesy.model.Fine;
 import com.transfinesy.model.Student;
+import com.transfinesy.model.Event;
 import com.transfinesy.service.ClearanceService;
+import com.transfinesy.service.EventService;
+import com.transfinesy.service.FineService;
 import com.transfinesy.service.LedgerService;
 import com.transfinesy.service.StudentService;
 import org.springframework.stereotype.Controller;
@@ -21,11 +25,15 @@ public class ClearanceController {
     private final StudentService studentService;
     private final LedgerService ledgerService;
     private final ClearanceService clearanceService;
+    private final FineService fineService;
+    private final EventService eventService;
 
-    public ClearanceController(StudentService studentService, LedgerService ledgerService, ClearanceService clearanceService) {
+    public ClearanceController(StudentService studentService, LedgerService ledgerService, ClearanceService clearanceService, FineService fineService, EventService eventService) {
         this.studentService = studentService;
         this.ledgerService = ledgerService;
         this.clearanceService = clearanceService;
+        this.fineService = fineService;
+        this.eventService = eventService;
     }
 
     @GetMapping
@@ -87,7 +95,33 @@ public class ClearanceController {
 
         Map<String, Double> balances = new HashMap<>();
         Map<String, String> clearanceStatuses = new HashMap<>();
+        Map<String, List<Fine>> studentFinesMap = new HashMap<>();
+        Map<String, Event> eventMap = new HashMap<>();
+        Map<String, Double> totalFinesMap = new HashMap<>();
         List<Student> students = new java.util.ArrayList<>();
+        java.util.Set<String> eventIDs = new java.util.HashSet<>();
+
+        // First pass: collect all event IDs from fines
+        for (Student student : allStudents) {
+            try {
+                List<Fine> fines = fineService.getFinesByStudent(student.getStudID());
+                for (Fine fine : fines) {
+                    if (fine.getEventID() != null) {
+                        eventIDs.add(fine.getEventID());
+                    }
+                }
+            } catch (Exception e) {
+                // Continue processing
+            }
+        }
+
+        // Get event information only for events that have fines
+        for (String eventID : eventIDs) {
+            Event event = eventService.getEventById(eventID);
+            if (event != null) {
+                eventMap.put(eventID, event);
+            }
+        }
 
         for (Student student : allStudents) {
             try {
@@ -95,6 +129,16 @@ public class ClearanceController {
                 String status = clearanceService.getClearanceStatus(student);
                 balances.put(student.getStudID(), balance);
                 clearanceStatuses.put(student.getStudID(), status);
+                
+                // Get all fines for this student
+                List<Fine> fines = fineService.getFinesByStudent(student.getStudID());
+                studentFinesMap.put(student.getStudID(), fines);
+                
+                // Calculate total fines
+                double totalFines = fines.stream()
+                    .mapToDouble(Fine::getFineAmount)
+                    .sum();
+                totalFinesMap.put(student.getStudID(), totalFines);
 
                 if (filter == null || filter.equals("All")) {
                     students.add(student);
@@ -107,6 +151,8 @@ public class ClearanceController {
 
                 balances.put(student.getStudID(), 0.0);
                 clearanceStatuses.put(student.getStudID(), "WITH BALANCE");
+                studentFinesMap.put(student.getStudID(), new java.util.ArrayList<>());
+                totalFinesMap.put(student.getStudID(), 0.0);
                 if (filter == null || filter.equals("All") || filter.equals("WITH BALANCE")) {
                     students.add(student);
                 }
@@ -119,6 +165,9 @@ public class ClearanceController {
         model.addAttribute("filter", filter);
         model.addAttribute("balances", balances);
         model.addAttribute("clearanceStatuses", clearanceStatuses);
+        model.addAttribute("studentFinesMap", studentFinesMap);
+        model.addAttribute("eventMap", eventMap);
+        model.addAttribute("totalFinesMap", totalFinesMap);
         model.addAttribute("search", search);
         model.addAttribute("searchType", searchType);
 

@@ -245,7 +245,14 @@
                     Finalize Event & Compute Fines
                 </button>
             </form>
-            <div th:if="${event.finalized}" class="btn btn-success" style="cursor: default;">
+            <form th:if="${event.finalized}" th:action="@{/attendance/regenerate-fines/{id}(id=${event.eventID})}" method="post" style="display: inline;"
+                  onsubmit="return confirm('Regenerate fines for this event? This will delete existing fines and create new ones based on current attendance records.');">
+                <button type="submit" class="btn btn-warning">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    Regenerate Fines
+                </button>
+            </form>
+            <div th:if="${event.finalized}" class="btn btn-success" style="cursor: default; margin-left: var(--spacing-sm);">
                 <i class="bi bi-check-circle-fill"></i>
                 Event Finalized
             </div>
@@ -297,23 +304,35 @@
                                     <th>Course</th>
                                     <th>Year</th>
                                     <th>Section</th>
+                                    <th>Session</th>
+                                    <th>Checkpoints Completed</th>
+                                    <th>Late Minutes</th>
                                     <th>Status</th>
                                     <th>Fine Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr th:if="${#lists.isEmpty(absentStudents)}">
-                                    <td colspan="7" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">
+                                    <td colspan="10" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">
                                         No absent students.
                                     </td>
                                 </tr>
                                 <tr th:each="item : ${absentStudents}" 
-                                    th:with="student=${item.student}, status=${item.status}, fineAmount=${item.fineAmount}">
-                                    <td th:text="${student.studID}">STUD001</td>
-                                    <td th:text="${student.fullName}">Student Name</td>
-                                    <td th:text="${student.course}">-</td>
-                                    <td th:text="${student.yearLevel}">-</td>
-                                    <td th:text="${student.section}">-</td>
+                                    th:with="student=${item['student']}, status=${item['status']}, fineAmount=${item['fineAmount'] != null ? item['fineAmount'] : 0.0}, checkpointDisplay=${item['checkpointDisplay'] != null ? item['checkpointDisplay'] : '0/2'}, sessionType=${item['sessionType'] != null ? item['sessionType'] : 'BOTH'}, totalLateMinutes=${item['totalLateMinutes'] != null ? item['totalLateMinutes'] : 0}">
+                                    <td th:text="${student?.studID}">STUD001</td>
+                                    <td th:text="${student?.fullName}">Student Name</td>
+                                    <td th:text="${student?.course ?: '-'}">-</td>
+                                    <td th:text="${student?.yearLevel ?: '-'}">-</td>
+                                    <td th:text="${student?.section ?: '-'}">-</td>
+                                    <td>
+                                        <span th:if="${event?.sessionType?.name() == 'MORNING_ONLY'}" class="badge badge-info">AM</span>
+                                        <span th:if="${event?.sessionType?.name() == 'AFTERNOON_ONLY'}" class="badge badge-info">PM</span>
+                                        <span th:if="${event?.sessionType?.name() == 'BOTH'}" class="badge badge-primary">BOTH</span>
+                                    </td>
+                                    <td>
+                                        <span style="font-weight: 600; font-size: 1.05em;" th:text="${checkpointDisplay}">0/2</span>
+                                    </td>
+                                    <td th:text="${totalLateMinutes}">0</td>
                                     <td>
                                         <span class="badge badge-error" th:text="${status}">ABSENT</span>
                                     </td>
@@ -341,23 +360,35 @@
                                     <th>Course</th>
                                     <th>Year</th>
                                     <th>Section</th>
+                                    <th>Session</th>
+                                    <th>Checkpoints Completed</th>
+                                    <th>Late Minutes</th>
                                     <th>Status</th>
                                     <th>Fine Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr th:if="${#lists.isEmpty(lateStudents)}">
-                                    <td colspan="7" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">
+                                    <td colspan="10" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">
                                         No late students.
                                     </td>
                                 </tr>
                                 <tr th:each="item : ${lateStudents}" 
-                                    th:with="student=${item.student}, status=${item.status}, fineAmount=${item.fineAmount}">
-                                    <td th:text="${student.studID}">STUD001</td>
-                                    <td th:text="${student.fullName}">Student Name</td>
-                                    <td th:text="${student.course}">-</td>
-                                    <td th:text="${student.yearLevel}">-</td>
-                                    <td th:text="${student.section}">-</td>
+                                    th:with="student=${item['student']}, status=${item['status']}, fineAmount=${item['fineAmount'] != null ? item['fineAmount'] : 0.0}, checkpointDisplay=${item['checkpointDisplay'] != null ? item['checkpointDisplay'] : '0/2'}, sessionType=${item['sessionType'] != null ? item['sessionType'] : 'BOTH'}, totalLateMinutes=${item['totalLateMinutes'] != null ? item['totalLateMinutes'] : 0}">
+                                    <td th:text="${student?.studID}">STUD001</td>
+                                    <td th:text="${student?.fullName}">Student Name</td>
+                                    <td th:text="${student?.course ?: '-'}">-</td>
+                                    <td th:text="${student?.yearLevel ?: '-'}">-</td>
+                                    <td th:text="${student?.section ?: '-'}">-</td>
+                                    <td>
+                                        <span th:if="${event?.sessionType?.name() == 'MORNING_ONLY'}" class="badge badge-info">AM</span>
+                                        <span th:if="${event?.sessionType?.name() == 'AFTERNOON_ONLY'}" class="badge badge-info">PM</span>
+                                        <span th:if="${event?.sessionType?.name() == 'BOTH'}" class="badge badge-primary">BOTH</span>
+                                    </td>
+                                    <td>
+                                        <span style="font-weight: 600; font-size: 1.05em;" th:text="${checkpointDisplay}">0/2</span>
+                                    </td>
+                                    <td th:text="${totalLateMinutes}">0</td>
                                     <td>
                                         <span class="badge badge-warning" th:text="${status}">LATE</span>
                                     </td>
@@ -385,23 +416,35 @@
                                     <th>Course</th>
                                     <th>Year</th>
                                     <th>Section</th>
+                                    <th>Session</th>
+                                    <th>Checkpoints Completed</th>
+                                    <th>Late Minutes</th>
                                     <th>Status</th>
                                     <th>Fine Amount</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr th:if="${#lists.isEmpty(presentStudents)}">
-                                    <td colspan="7" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">
+                                    <td colspan="10" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">
                                         No present students.
                                     </td>
                                 </tr>
                                 <tr th:each="item : ${presentStudents}" 
-                                    th:with="student=${item.student}, status=${item.status}, fineAmount=${item.fineAmount}">
-                                    <td th:text="${student.studID}">STUD001</td>
-                                    <td th:text="${student.fullName}">Student Name</td>
-                                    <td th:text="${student.course}">-</td>
-                                    <td th:text="${student.yearLevel}">-</td>
-                                    <td th:text="${student.section}">-</td>
+                                    th:with="student=${item['student']}, status=${item['status']}, fineAmount=${item['fineAmount'] != null ? item['fineAmount'] : 0.0}, checkpointDisplay=${item['checkpointDisplay'] != null ? item['checkpointDisplay'] : '2/2'}, sessionType=${item['sessionType'] != null ? item['sessionType'] : 'BOTH'}, totalLateMinutes=${item['totalLateMinutes'] != null ? item['totalLateMinutes'] : 0}">
+                                    <td th:text="${student?.studID}">STUD001</td>
+                                    <td th:text="${student?.fullName}">Student Name</td>
+                                    <td th:text="${student?.course ?: '-'}">-</td>
+                                    <td th:text="${student?.yearLevel ?: '-'}">-</td>
+                                    <td th:text="${student?.section ?: '-'}">-</td>
+                                    <td>
+                                        <span th:if="${event?.sessionType?.name() == 'MORNING_ONLY'}" class="badge badge-info">AM</span>
+                                        <span th:if="${event?.sessionType?.name() == 'AFTERNOON_ONLY'}" class="badge badge-info">PM</span>
+                                        <span th:if="${event?.sessionType?.name() == 'BOTH'}" class="badge badge-primary">BOTH</span>
+                                    </td>
+                                    <td>
+                                        <span style="font-weight: 600; font-size: 1.05em;" th:text="${checkpointDisplay}">2/2</span>
+                                    </td>
+                                    <td th:text="${totalLateMinutes}">0</td>
                                     <td>
                                         <span class="badge badge-success" th:text="${status}">PRESENT</span>
                                     </td>

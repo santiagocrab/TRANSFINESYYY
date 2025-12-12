@@ -93,13 +93,14 @@
                             <th>Year</th>
                             <th>Section</th>
                             <th>Amount</th>
+                            <th>Balance</th>
                             <th>OR Number</th>
                             <th>Date</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr th:if="${payments.isEmpty()}">
-                            <td colspan="9" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">No payments found.</td>
+                            <td colspan="10" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">No payments found.</td>
                         </tr>
                         <tr th:each="payment : ${payments}" th:with="student=${studentMap.get(payment.studID)}">
                             <td th:text="${payment.paymentID}">PAY001</td>
@@ -109,6 +110,9 @@
                             <td th:text="${student != null ? student.yearLevel : 'N/A'}">1</td>
                             <td th:text="${student != null ? student.section : 'N/A'}">A</td>
                             <td style="font-weight: 600; color: var(--success);" th:text="'₱' + ${#numbers.formatDecimal(payment.amount, 1, 2)}">₱0.00</td>
+                            <td style="font-weight: 600;" 
+                                th:classappend="${balancesMap.get(payment.studID) > 0} ? 'error' : 'success'"
+                                th:text="'₱' + ${#numbers.formatDecimal(balancesMap.get(payment.studID), 1, 2)}">₱0.00</td>
                             <td th:text="${payment.orNumber}">OR001</td>
                             <td th:text="${#temporals.format(payment.date, 'yyyy-MM-dd')}">2025-01-01</td>
                         </tr>

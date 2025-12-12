@@ -6,6 +6,7 @@ import com.transfinesy.model.Event;
 import com.transfinesy.model.Fine;
 import com.transfinesy.repo.FineRepository;
 import com.transfinesy.repo.FineRepositoryImpl;
+import com.transfinesy.util.CheckpointAttendanceCalculator;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -35,6 +36,21 @@ public class FineService {
         return calculateFineAmount(status, minutesLate, null);
     }
 
+    /**
+     * Calculate fine amount based on checkpoint presence ratio
+     * This is the new method that uses 4-checkpoint logic
+     */
+    public double calculateFineAmountFromCheckpoints(String studID, String eventID, 
+                                                      List<Attendance> attendances, Event event) {
+        CheckpointAttendanceCalculator.AttendanceResult result = 
+            CheckpointAttendanceCalculator.calculateAttendanceResult(studID, eventID, attendances, event);
+        return result.getFineAmount();
+    }
+    
+    /**
+     * Legacy method - kept for backward compatibility
+     * For new checkpoint-based system, use calculateFineAmountFromCheckpoints
+     */
     public double calculateFineAmount(AttendanceStatus status, int minutesLate, Event event) {
         switch (status) {
             case ABSENT:
@@ -103,8 +119,18 @@ public class FineService {
         if (fine == null) {
             throw new IllegalArgumentException("Fine cannot be null");
         }
-        repository.save(fine);
-        ledgerService.addTransactionToLedger(fine.getStudID(), fine);
+        if (fine.getFineAmount() <= 0) {
+            throw new IllegalArgumentException("Fine amount must be greater than 0. Amount: " + fine.getFineAmount());
+        }
+        try {
+            repository.save(fine);
+            System.out.println("✓ Fine saved to database: " + fine.getFineID() + " for student " + fine.getStudID() + " amount: ₱" + fine.getFineAmount());
+            ledgerService.addTransactionToLedger(fine.getStudID(), fine);
+        } catch (Exception e) {
+            System.err.println("✗ CRITICAL ERROR saving fine to database: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to save fine to database", e);
+        }
     }
 
     public void generateFinesFromAttendances(List<Attendance> attendances, String eventID) {
@@ -112,8 +138,17 @@ public class FineService {
     }
 
     public void generateFinesFromAttendances(List<Attendance> attendances, String eventID, Event event) {
+        System.out.println("\n=== STARTING FINE GENERATION ===");
+        System.out.println("Event ID: " + eventID);
+        System.out.println("Event: " + (event != null ? event.getEventName() : "NULL"));
+        System.out.println("Event Fine Absent: " + (event != null && event.getFineAmountAbsent() != null ? event.getFineAmountAbsent() : "DEFAULT (100.0)"));
+        System.out.println("Event Fine Late: " + (event != null && event.getFineAmountLate() != null ? event.getFineAmountLate() : "DEFAULT (2.0/min)"));
+        System.out.println("Total attendance records: " + attendances.size());
+        
         java.util.Set<String> processedStudents = new java.util.HashSet<>();
         List<Fine> existingFines = getFinesByEvent(eventID);
+        System.out.println("Existing fines in database: " + existingFines.size());
+        
         java.util.Set<String> studentsWithFines = existingFines.stream()
             .map(Fine::getStudID)
             .collect(java.util.stream.Collectors.toSet());
@@ -122,23 +157,82 @@ public class FineService {
             .map(Attendance::getStudID)
             .collect(java.util.stream.Collectors.toSet());
         
+        System.out.println("Unique student IDs: " + allStudentIDs.size());
+        System.out.println("Students with existing fines: " + studentsWithFines.size());
+        
+        int finesCreated = 0;
+        int finesSkipped = 0;
+        int finesFailed = 0;
+        double totalFinesAmount = 0.0;
+        
         for (String studID : allStudentIDs) {
-            if (processedStudents.contains(studID) || studentsWithFines.contains(studID)) {
+            // Skip if already processed in this run
+            if (processedStudents.contains(studID)) {
+                finesSkipped++;
                 continue;
             }
             
-            AttendanceStatus finalStatus = determineFinalAttendanceStatus(attendances, studID, eventID);
-            if (finalStatus != null && finalStatus != AttendanceStatus.PRESENT) {
-                Attendance representativeAttendance = findRepresentativeAttendance(attendances, studID, eventID, finalStatus);
-                if (representativeAttendance != null) {
-                    Fine fine = createFineFromAttendance(representativeAttendance, eventID, event);
-                    if (fine != null) {
-                        saveFine(fine);
-                        processedStudents.add(studID);
-                    }
+            // If student already has a fine for this event, skip (don't create duplicate)
+            if (studentsWithFines.contains(studID)) {
+                finesSkipped++;
+                continue;
+            }
+            
+            // Use new checkpoint-based calculation
+            CheckpointAttendanceCalculator.AttendanceResult result = 
+                CheckpointAttendanceCalculator.calculateAttendanceResult(studID, eventID, attendances, event);
+            
+            int totalCheckpoints = CheckpointAttendanceCalculator.getTotalCheckpoints(event);
+            
+            System.out.println("Student " + studID + " - Checkpoint Analysis:");
+            System.out.println("  Present Count: " + result.getPresentCount() + "/" + totalCheckpoints);
+            System.out.println("  Presence Ratio: " + String.format("%.2f", result.getPresenceRatio()));
+            System.out.println("  Total Late Minutes: " + result.getTotalLateMinutes());
+            System.out.println("  Calculated Fine Amount: ₱" + result.getFineAmount());
+            
+            // Only create fine if amount > 0
+            if (result.getFineAmount() > 0) {
+                try {
+                    String fineID = "FINE-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                    String transactionID = "TXN-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+                    Fine fine = new Fine(
+                        fineID,
+                        transactionID,
+                        studID,
+                        eventID,
+                        result.getFineAmount(),
+                        LocalDate.now()
+                    );
+                    
+                    System.out.println("  Attempting to save fine: " + fineID + " for student " + studID);
+                    saveFine(fine);
+                    processedStudents.add(studID);
+                    finesCreated++;
+                    totalFinesAmount += result.getFineAmount();
+                    System.out.println("  ✓ SUCCESS: Saved fine for student " + studID + ": ₱" + result.getFineAmount() + 
+                                     " (Present: " + result.getPresentCount() + "/" + totalCheckpoints + ")");
+                } catch (Exception e) {
+                    finesFailed++;
+                    System.err.println("  ✗ FAILED: Error saving fine for student " + studID + ": " + e.getMessage());
+                    e.printStackTrace();
                 }
+            } else {
+                System.out.println("  Student " + studID + " has no fine (Present: " + result.getPresentCount() + "/" + 
+                                 totalCheckpoints + ")");
             }
         }
+        
+        System.out.println("\n=== FINE GENERATION SUMMARY ===");
+        System.out.println("Total fines created: " + finesCreated);
+        System.out.println("Total fines skipped (already exist): " + finesSkipped);
+        System.out.println("Total fines failed: " + finesFailed);
+        System.out.println("Total amount: ₱" + totalFinesAmount);
+        
+        // Verify by querying database
+        List<Fine> verifyFines = getFinesByEvent(eventID);
+        double verifyTotal = verifyFines.stream().mapToDouble(Fine::getFineAmount).sum();
+        System.out.println("Database verification: " + verifyFines.size() + " fines, total: ₱" + verifyTotal);
+        System.out.println("==============================\n");
     }
     
     private AttendanceStatus determineFinalAttendanceStatus(List<Attendance> attendances, String studID, String eventID) {
@@ -220,6 +314,24 @@ public class FineService {
                 .filter(a -> a.getStudID().equals(studID) && a.getEventID().equals(eventID))
                 .filter(a -> a.getStatus() == AttendanceStatus.HALF_ABSENT_PM || 
                            ("PM".equalsIgnoreCase(a.getSession()) && "TIME_OUT".equals(a.getRecordType())))
+                .findFirst()
+                .orElse(null);
+        } else if (targetStatus == AttendanceStatus.ABSENT) {
+            // For ABSENT status, first try to find any attendance record with ABSENT status
+            Attendance absentRecord = attendances.stream()
+                .filter(a -> a.getStudID().equals(studID) && a.getEventID().equals(eventID))
+                .filter(a -> a.getStatus() == AttendanceStatus.ABSENT)
+                .findFirst()
+                .orElse(null);
+            
+            if (absentRecord != null) {
+                return absentRecord;
+            }
+            
+            // If no ABSENT record found, check for TIME_IN records with ABSENT status
+            return attendances.stream()
+                .filter(a -> a.getStudID().equals(studID) && a.getEventID().equals(eventID))
+                .filter(a -> "TIME_IN".equals(a.getRecordType()) && a.getStatus() == AttendanceStatus.ABSENT)
                 .findFirst()
                 .orElse(null);
         } else {

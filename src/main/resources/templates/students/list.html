@@ -113,12 +113,14 @@
                             <th>Year Level</th>
                             <th>Section</th>
                             <th>RFID Tag</th>
+                            <th>Total Fines</th>
+                            <th>Balance</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr th:if="${students.isEmpty()}">
-                            <td colspan="8" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">No students found.</td>
+                            <td colspan="10" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">No students found.</td>
                         </tr>
                         <tr th:each="student : ${students}">
                             <td th:text="${student.studID}">STUD001</td>
@@ -131,8 +133,17 @@
                                 <span th:if="${student.rfidTag != null and !#strings.isEmpty(student.rfidTag)}" th:text="${student.rfidTag}" class="badge badge-info"></span>
                                 <span th:if="${student.rfidTag == null or #strings.isEmpty(student.rfidTag)}" class="text-muted">—</span>
                             </td>
+                            <td style="font-weight: 600; color: var(--error);">
+                                ₱<span th:text="${#numbers.formatDecimal(totalFinesMap.get(student.studID), 1, 2)}">0.00</span>
+                            </td>
+                            <td style="font-weight: 600;" 
+                                th:classappend="${balancesMap.get(student.studID) > 0} ? 'error' : 'success'"
+                                th:text="'₱' + ${#numbers.formatDecimal(balancesMap.get(student.studID), 1, 2)}">₱0.00</td>
                             <td>
                                 <div style="display: flex; gap: var(--spacing-sm);">
+                                    <a th:href="@{/ledger?studentId={id}(id=${student.studID})}" class="btn btn-primary btn-sm" title="View Ledger">
+                                        <i class="bi bi-wallet2"></i>
+                                    </a>
                                     <a th:href="@{/students/edit/{id}(id=${student.studID})}" class="btn btn-secondary btn-sm">
                                         <i class="bi bi-pencil"></i>
                                     </a>

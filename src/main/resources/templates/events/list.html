@@ -32,12 +32,13 @@
                             <th>Date</th>
                             <th>Semester</th>
                             <th>School Year</th>
+                            <th>Total Fines</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr th:if="${events.isEmpty()}">
-                            <td colspan="6" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">No events found.</td>
+                            <td colspan="7" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">No events found.</td>
                         </tr>
                         <tr th:each="event : ${events}">
                             <td th:text="${event.eventID}">EVT001</td>
@@ -54,6 +55,9 @@
                             <td th:text="${#temporals.format(event.eventDate, 'yyyy-MM-dd')}">2025-01-01</td>
                             <td th:text="${event.semester ?: 'N/A'}">1</td>
                             <td th:text="${event.schoolYear ?: 'N/A'}">2025-2026</td>
+                            <td style="font-weight: 600; color: var(--error);">
+                                ₱<span th:text="${#numbers.formatDecimal(eventFinesMap.get(event.eventID), 1, 2)}">0.00</span>
+                            </td>
                             <td>
                                 <div style="display: flex; gap: var(--spacing-sm);">
                                     <!-- Edit Button - Hidden if finalized -->

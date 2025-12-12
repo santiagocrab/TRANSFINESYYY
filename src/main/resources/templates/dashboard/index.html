@@ -243,39 +243,27 @@
                 <div class="stats-grid">
                     <div class="stat-card" style="position: relative;">
                         <div class="stat-label">
-                            Present
+                            Total Overall Presents
                             <i class="bi bi-question-circle" style="margin-left: 4px; font-size: 0.875rem; color: #9CA3AF; cursor: help;" 
-                               title="Number of unique students marked as present for the selected event(s)."></i>
+                               title="Total number of unique students marked as present across all selected events."></i>
                         </div>
-                        <div class="stat-value success" th:text="${presentCount}">0</div>
+                        <div class="stat-value success" th:text="${#numbers.formatInteger(totalOverallPresent, 0, 'COMMA')}">0</div>
                     </div>
                     <div class="stat-card" style="position: relative;">
                         <div class="stat-label">
-                            Late
+                            Total Overall Lates
                             <i class="bi bi-question-circle" style="margin-left: 4px; font-size: 0.875rem; color: #9CA3AF; cursor: help;" 
-                               title="Number of unique students marked as late for the selected event(s)."></i>
+                               title="Total number of attendance records marked as late across ALL events."></i>
                         </div>
-                        <div class="stat-value warning" th:text="${lateCount}">0</div>
+                        <div class="stat-value warning" th:text="${#numbers.formatInteger(totalOverallLate, 0, 'COMMA')}">0</div>
                     </div>
                     <div class="stat-card" style="position: relative;">
                         <div class="stat-label">
-                            Absent
+                            Total Overall Absents
                             <i class="bi bi-question-circle" style="margin-left: 4px; font-size: 0.875rem; color: #9CA3AF; cursor: help;" 
-                               title="Number of unique students marked as absent for the selected event(s)."></i>
+                               title="Total number of attendance records marked as absent (including half-absent) across ALL events."></i>
                         </div>
-                        <div class="stat-value error" th:text="${absentCount}">0</div>
-                    </div>
-                    <div class="stat-card" style="position: relative;">
-                        <div class="stat-label">
-                            Half Absent
-                            <i class="bi bi-question-circle" style="margin-left: 4px; font-size: 0.875rem; color: #9CA3AF; cursor: help;" 
-                               title="Number of students who timed out without timing in. Fine is half of absent fine (₱50.00 if absent fine is ₱100.00)."></i>
-                        </div>
-                        <div class="stat-value warning">
-                            <span th:text="${totalHalfAbsent}">0</span>
-                            <span th:if="${totalHalfAbsent > 0}" 
-                                  th:text="' (AM: ' + ${halfAbsentAMCount} + ', PM: ' + ${halfAbsentPMCount} + ')'"></span>
-                        </div>
+                        <div class="stat-value error" th:text="${#numbers.formatInteger(totalOverallAbsent, 0, 'COMMA')}">0</div>
                     </div>
                 </div>
                 <div th:if="${hasAttendanceEventFilter}" style="margin-top: var(--spacing-md); padding: var(--spacing-sm); background-color: #FEF3C7; border-radius: 4px; font-size: 0.875rem; color: #92400E;">

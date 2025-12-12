@@ -68,8 +68,16 @@ public class PaymentController {
         List<Student> students = studentService.getAllStudents();
 
         Map<String, Student> studentMap = new HashMap<>();
+        Map<String, Double> balancesMap = new HashMap<>();
+        
         for (Student student : students) {
             studentMap.put(student.getStudID(), student);
+            try {
+                double balance = ledgerService.getBalanceForStudent(student.getStudID());
+                balancesMap.put(student.getStudID(), balance);
+            } catch (Exception e) {
+                balancesMap.put(student.getStudID(), 0.0);
+            }
         }
 
         model.addAttribute("pageTitle", "Payments");
@@ -77,6 +85,7 @@ public class PaymentController {
         model.addAttribute("payments", payments);
         model.addAttribute("students", students);
         model.addAttribute("studentMap", studentMap);
+        model.addAttribute("balancesMap", balancesMap);
         model.addAttribute("search", search);
         model.addAttribute("searchType", searchType);
         model.addAttribute("today", LocalDate.now());

@@ -89,6 +89,7 @@ public class DashboardController {
                                       (attendanceYearLevel != null && !attendanceYearLevel.isEmpty() && !attendanceYearLevel.equals("all")) ||
                                       (attendanceSection != null && !attendanceSection.isEmpty() && !attendanceSection.equals("all"));
 
+        // Get filtered counts (if filters are applied)
         Map<String, Long> attendanceCounts;
         if (attendanceEventFilter != null || hasAttendanceFilters) {
             attendanceCounts = attendanceService.getAttendanceCountsByStatusFiltered(
@@ -101,12 +102,31 @@ public class DashboardController {
             attendanceCounts = attendanceService.getAttendanceCountsByStatus(null);
         }
 
-        long presentCount = attendanceCounts.getOrDefault("PRESENT", 0L);
-        long lateCount = attendanceCounts.getOrDefault("LATE", 0L);
-        long absentCount = attendanceCounts.getOrDefault("ABSENT", 0L);
-        long halfAbsentAMCount = attendanceCounts.getOrDefault("HALF_ABSENT_AM", 0L);
-        long halfAbsentPMCount = attendanceCounts.getOrDefault("HALF_ABSENT_PM", 0L);
-        long totalHalfAbsent = halfAbsentAMCount + halfAbsentPMCount;
+        // ALWAYS get overall totals across ALL events (no filters) - count TOTAL records, not unique students
+        System.out.println("=== CALLING getTotalAttendanceRecordsByStatus() ===");
+        Map<String, Long> overallAttendanceCounts = attendanceService.getTotalAttendanceRecordsByStatus();
+        System.out.println("Raw counts from service: " + overallAttendanceCounts);
+        
+        long overallPresentCount = overallAttendanceCounts.getOrDefault("PRESENT", 0L);
+        long overallLateCount = overallAttendanceCounts.getOrDefault("LATE", 0L);
+        long overallAbsentCount = overallAttendanceCounts.getOrDefault("ABSENT", 0L);
+        long overallHalfAbsentAMCount = overallAttendanceCounts.getOrDefault("HALF_ABSENT_AM", 0L);
+        long overallHalfAbsentPMCount = overallAttendanceCounts.getOrDefault("HALF_ABSENT_PM", 0L);
+        
+        // Count half-absent as absent for overall totals
+        long totalOverallAbsent = overallAbsentCount + overallHalfAbsentAMCount + overallHalfAbsentPMCount;
+        long totalOverallLate = overallLateCount;
+        long totalOverallPresent = overallPresentCount;
+        
+        // Debug logging
+        System.out.println("=== DASHBOARD ATTENDANCE COUNTS (OVERALL - ALL EVENTS) ===");
+        System.out.println("Raw counts - PRESENT: " + overallPresentCount + ", LATE: " + overallLateCount + ", ABSENT: " + overallAbsentCount);
+        System.out.println("Raw counts - HALF_ABSENT_AM: " + overallHalfAbsentAMCount + ", HALF_ABSENT_PM: " + overallHalfAbsentPMCount);
+        System.out.println("OVERALL PRESENT (all events): " + totalOverallPresent);
+        System.out.println("OVERALL LATE (all events): " + totalOverallLate);
+        System.out.println("OVERALL ABSENT (all events): " + totalOverallAbsent);
+        System.out.println("Adding to model: totalOverallPresent=" + totalOverallPresent + ", totalOverallLate=" + totalOverallLate + ", totalOverallAbsent=" + totalOverallAbsent);
+        System.out.println("===================================");
 
         String selectedAttendanceEventName = "All Events";
         if (attendanceEventFilter != null) {
@@ -154,12 +174,13 @@ public class DashboardController {
         model.addAttribute("totalServiceCredits", totalServiceCredits);
         model.addAttribute("outstandingBalance", outstandingBalance);
 
-        model.addAttribute("presentCount", presentCount);
-        model.addAttribute("lateCount", lateCount);
-        model.addAttribute("absentCount", absentCount);
-        model.addAttribute("halfAbsentAMCount", halfAbsentAMCount);
-        model.addAttribute("halfAbsentPMCount", halfAbsentPMCount);
-        model.addAttribute("totalHalfAbsent", totalHalfAbsent);
+        // Convert to Long objects to ensure Thymeleaf can process them
+        model.addAttribute("totalOverallPresent", Long.valueOf(totalOverallPresent));
+        model.addAttribute("totalOverallLate", Long.valueOf(totalOverallLate));
+        model.addAttribute("totalOverallAbsent", Long.valueOf(totalOverallAbsent));
+        
+        System.out.println("DEBUG: Model attributes set - totalOverallPresent=" + totalOverallPresent + 
+                         ", totalOverallLate=" + totalOverallLate + ", totalOverallAbsent=" + totalOverallAbsent);
         model.addAttribute("selectedAttendanceEventName", selectedAttendanceEventName);
         model.addAttribute("hasAttendanceEventFilter", attendanceEventFilter != null);
 

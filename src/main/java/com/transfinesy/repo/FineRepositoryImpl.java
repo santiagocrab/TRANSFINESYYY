@@ -115,7 +115,14 @@ public class FineRepositoryImpl implements FineRepository {
                 );
                 fines.add(fine);
             }
+            
+            System.out.println("Query: Found " + fines.size() + " fines for event " + eventID);
+            if (!fines.isEmpty()) {
+                double total = fines.stream().mapToDouble(Fine::getFineAmount).sum();
+                System.out.println("  Total amount: ₱" + total);
+            }
         } catch (SQLException e) {
+            System.err.println("✗ SQL ERROR querying fines for event " + eventID + ": " + e.getMessage());
             e.printStackTrace();
         }
 
@@ -135,10 +142,21 @@ public class FineRepositoryImpl implements FineRepository {
             pstmt.setString(4, f.getEventID());
             pstmt.setDouble(5, f.getFineAmount());
             pstmt.setDate(6, Date.valueOf(f.getDate()));
-            pstmt.executeUpdate();
+            
+            int rowsAffected = pstmt.executeUpdate();
+            if (rowsAffected == 0) {
+                throw new RuntimeException("Failed to save fine - no rows affected");
+            }
+            
+            System.out.println("✓ Fine saved to database: " + f.getFineID() + " | Student: " + f.getStudID() + " | Event: " + f.getEventID() + " | Amount: ₱" + f.getFineAmount());
         } catch (SQLException e) {
+            System.err.println("✗ SQL ERROR saving fine: " + e.getMessage());
+            System.err.println("  Fine ID: " + f.getFineID());
+            System.err.println("  Student ID: " + f.getStudID());
+            System.err.println("  Event ID: " + f.getEventID());
+            System.err.println("  Amount: " + f.getFineAmount());
             e.printStackTrace();
-            throw new RuntimeException("Failed to save fine", e);
+            throw new RuntimeException("Failed to save fine to database: " + e.getMessage(), e);
         }
     }
 

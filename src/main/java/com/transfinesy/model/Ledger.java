@@ -55,6 +55,7 @@ public class Ledger {
         }
 
         double balance = openingBalance + totalFines - totalPayments - totalCredits;
+        // Ensure balance never goes negative - normalize to 0
         closingBalance = Math.max(0.0, balance);
 
         this.totalFines = totalFines;
@@ -65,6 +66,7 @@ public class Ledger {
     }
 
     public double getBalance() {
+        // Ensure balance never goes negative - normalize to 0
         return Math.max(0.0, closingBalance);
     }
 

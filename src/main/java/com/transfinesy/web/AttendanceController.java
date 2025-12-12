@@ -7,6 +7,7 @@ import com.transfinesy.model.Student;
 import com.transfinesy.service.AttendanceService;
 import com.transfinesy.service.EventService;
 import com.transfinesy.service.StudentService;
+import com.transfinesy.util.CheckpointAttendanceCalculator;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -69,9 +70,8 @@ public class AttendanceController {
             fineMap.put(fine.getStudID(), fine);
         }
 
-        // Group attendances by final status (per student) using FineService logic
-        Map<String, AttendanceStatus> studentFinalStatus = new HashMap<>();
-        Map<String, Attendance> studentRepresentativeAttendance = new HashMap<>();
+        // Use new checkpoint-based calculation for all students
+        Map<String, CheckpointAttendanceCalculator.AttendanceResult> studentResults = new HashMap<>();
         
         // Get unique student IDs
         java.util.Set<String> uniqueStudentIDs = new java.util.HashSet<>();
@@ -79,45 +79,113 @@ public class AttendanceController {
             uniqueStudentIDs.add(att.getStudID());
         }
         
+        // Calculate checkpoint-based attendance for each student
         for (String studID : uniqueStudentIDs) {
             List<Attendance> studentAttendances = allAttendances.stream()
                 .filter(a -> a.getStudID().equals(studID))
                 .collect(java.util.stream.Collectors.toList());
             
-            // Determine final status using similar logic to FineService
-            AttendanceStatus finalStatus = determineFinalStatusForStudent(studentAttendances, eventId);
-            studentFinalStatus.put(studID, finalStatus);
-            
-            // Find representative attendance
-            Attendance representative = findRepresentativeAttendance(studentAttendances, finalStatus);
-            if (representative != null) {
-                studentRepresentativeAttendance.put(studID, representative);
-            }
+            CheckpointAttendanceCalculator.AttendanceResult result = 
+                CheckpointAttendanceCalculator.calculateAttendanceResult(studID, eventId, studentAttendances, event);
+            studentResults.put(studID, result);
         }
 
-        // Separate students by status
+        // Separate students by presence ratio (for display purposes)
         List<Map<String, Object>> absentStudents = new java.util.ArrayList<>();
         List<Map<String, Object>> lateStudents = new java.util.ArrayList<>();
         List<Map<String, Object>> presentStudents = new java.util.ArrayList<>();
 
-        for (String studID : studentFinalStatus.keySet()) {
-            AttendanceStatus status = studentFinalStatus.get(studID);
+        for (String studID : uniqueStudentIDs) {
             Student student = studentMap.get(studID);
             com.transfinesy.model.Fine fine = fineMap.get(studID);
-            double fineAmount = (fine != null) ? fine.getFineAmount() : 0.0;
+            CheckpointAttendanceCalculator.AttendanceResult result = studentResults.get(studID);
+            
+            // Use fine from database if available, otherwise use calculated amount
+            double fineAmount = 0.0;
+            if (fine != null) {
+                fineAmount = fine.getFineAmount();
+            } else if (result != null) {
+                fineAmount = result.getFineAmount();
+            }
+            
+            // Get total checkpoints for this event
+            int totalCheckpoints = CheckpointAttendanceCalculator.getTotalCheckpoints(event);
+            
+            // Determine display status based on presence ratio
+            AttendanceStatus displayStatus;
+            if (result != null) {
+                if (result.getPresentCount() == totalCheckpoints) {
+                    displayStatus = AttendanceStatus.PRESENT;
+                } else if (result.getTotalLateMinutes() > 0) {
+                    displayStatus = AttendanceStatus.LATE;
+                } else {
+                    displayStatus = AttendanceStatus.ABSENT;
+                }
+            } else {
+                displayStatus = AttendanceStatus.ABSENT;
+            }
 
+            // Calculate session-specific checkpoint completion
+            CheckpointAttendanceCalculator.SessionCheckpointResult amResult = null;
+            CheckpointAttendanceCalculator.SessionCheckpointResult pmResult = null;
+            String checkpointDisplay = "";
+            
+            if (event.getSessionType() != null) {
+                switch (event.getSessionType()) {
+                    case MORNING_ONLY:
+                        amResult = CheckpointAttendanceCalculator.calculateAMSessionCheckpoints(studID, eventId, allAttendances);
+                        checkpointDisplay = amResult.getFraction(); // e.g., "1/2" or "2/2"
+                        break;
+                    case AFTERNOON_ONLY:
+                        pmResult = CheckpointAttendanceCalculator.calculatePMSessionCheckpoints(studID, eventId, allAttendances);
+                        checkpointDisplay = pmResult.getFraction(); // e.g., "1/2" or "2/2"
+                        break;
+                    case BOTH:
+                        amResult = CheckpointAttendanceCalculator.calculateAMSessionCheckpoints(studID, eventId, allAttendances);
+                        pmResult = CheckpointAttendanceCalculator.calculatePMSessionCheckpoints(studID, eventId, allAttendances);
+                        int totalPresent = (amResult != null ? amResult.getPresentCount() : 0) + 
+                                         (pmResult != null ? pmResult.getPresentCount() : 0);
+                        checkpointDisplay = "AM " + (amResult != null ? amResult.getFraction() : "0/2") + 
+                                         " | PM " + (pmResult != null ? pmResult.getFraction() : "0/2") + 
+                                         " | Total " + totalPresent + "/4";
+                        break;
+                }
+            } else {
+                // Default to total if session type is null
+                checkpointDisplay = (result != null ? result.getPresentCount() : 0) + "/" + totalCheckpoints;
+            }
+            
             Map<String, Object> studentInfo = new HashMap<>();
             studentInfo.put("student", student);
-            studentInfo.put("status", status);
+            studentInfo.put("status", displayStatus);
             studentInfo.put("fineAmount", fineAmount);
-            studentInfo.put("attendance", studentRepresentativeAttendance.get(studID));
+            studentInfo.put("presentCount", result != null ? result.getPresentCount() : 0);
+            studentInfo.put("totalCheckpoints", totalCheckpoints);
+            studentInfo.put("presenceRatio", result != null ? result.getPresenceRatio() : 0.0);
+            studentInfo.put("totalLateMinutes", result != null ? result.getTotalLateMinutes() : 0);
+            studentInfo.put("checkpointStatuses", result != null ? result.getCheckpointStatuses() : new HashMap<>());
+            studentInfo.put("checkpointDisplay", checkpointDisplay);
+            studentInfo.put("amCheckpointResult", amResult);
+            studentInfo.put("pmCheckpointResult", pmResult);
+            // Set sessionType based on event's actual session type
+            String sessionTypeName = "BOTH";
+            if (event.getSessionType() != null) {
+                sessionTypeName = event.getSessionType().name();
+            }
+            studentInfo.put("sessionType", sessionTypeName);
+            studentInfo.put("amCheckpointFraction", amResult != null ? amResult.getFraction() : "0/2");
+            studentInfo.put("pmCheckpointFraction", pmResult != null ? pmResult.getFraction() : "0/2");
+            
+            // Debug logging
+            System.out.println("Student " + studID + " - Event SessionType: " + sessionTypeName + ", checkpointDisplay: " + checkpointDisplay);
 
-            if (status == AttendanceStatus.ABSENT || status == AttendanceStatus.HALF_ABSENT_AM || status == AttendanceStatus.HALF_ABSENT_PM) {
-                absentStudents.add(studentInfo);
-            } else if (status == AttendanceStatus.LATE) {
-                lateStudents.add(studentInfo);
-            } else if (status == AttendanceStatus.PRESENT) {
+            // Categorize based on presence ratio
+            if (result != null && result.getPresentCount() == totalCheckpoints) {
                 presentStudents.add(studentInfo);
+            } else if (result != null && result.getTotalLateMinutes() > 0) {
+                lateStudents.add(studentInfo);
+            } else {
+                absentStudents.add(studentInfo);
             }
         }
 
@@ -288,6 +356,17 @@ public class AttendanceController {
             redirectAttributes.addFlashAttribute("successMessage", "Event finalized successfully. Fines have been generated.");
         } catch (Exception e) {
             redirectAttributes.addFlashAttribute("errorMessage", "Error finalizing event: " + e.getMessage());
+        }
+        return "redirect:/attendance/event/" + eventId;
+    }
+    
+    @PostMapping("/regenerate-fines/{eventId}")
+    public String regenerateFines(@PathVariable String eventId, RedirectAttributes redirectAttributes) {
+        try {
+            attendanceService.regenerateFinesForEvent(eventId);
+            redirectAttributes.addFlashAttribute("successMessage", "Fines regenerated successfully for this event.");
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Error regenerating fines: " + e.getMessage());
         }
         return "redirect:/attendance/event/" + eventId;
     }

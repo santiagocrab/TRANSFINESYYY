@@ -17,5 +17,7 @@ public interface AttendanceRepository {
     Map<String, Long> countUniqueStudentsByStatus(String eventId);
 
     Map<String, Long> countUniqueStudentsByStatusFiltered(String eventId, String course, String yearLevel, String section);
+    
+    Map<String, Long> countTotalAttendanceRecordsByStatus();
 }
 
