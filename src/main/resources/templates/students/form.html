@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:include="layout :: layout">
+<body>
+    <th:block th:fragment="content">
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1 class="page-title">
+                <i class="bi bi-person-plus"></i>
+                <span th:text="${student.studID != null ? 'Edit Student' : 'Add Student'}">Add Student</span>
+            </h1>
+            <a th:href="@{/students}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i>
+                Back
+            </a>
+        </div>
+
+        <!-- Form Card -->
+        <div class="card" style="max-width: 700px;">
+            <form th:action="@{/students/save}" th:object="${student}" method="post">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-lg);">
+                    <div class="form-group">
+                        <label class="form-label">Student ID <span style="color: var(--error);">*</span></label>
+                        <input type="text" th:field="*{studID}" class="form-control" 
+                               th:readonly="${student.studID != null}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">RFID Tag</label>
+                        <input type="text" th:field="*{rfidTag}" class="form-control" placeholder="Optional">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">First Name <span style="color: var(--error);">*</span></label>
+                        <input type="text" th:field="*{firstName}" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Last Name <span style="color: var(--error);">*</span></label>
+                        <input type="text" th:field="*{lastName}" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Course <span style="color: var(--error);">*</span></label>
+                        <input type="text" th:field="*{course}" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Year Level <span style="color: var(--error);">*</span></label>
+                        <input type="text" th:field="*{yearLevel}" class="form-control" required>
+                    </div>
+                    <div class="form-group" style="grid-column: 1 / -1;">
+                        <label class="form-label">Section <span style="color: var(--error);">*</span></label>
+                        <input type="text" th:field="*{section}" class="form-control" required>
+                    </div>
+                </div>
+                
+                <div style="display: flex; justify-content: flex-end; gap: var(--spacing-md); margin-top: var(--spacing-xl);">
+                    <a th:href="@{/students}" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i>
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </th:block>
+</body>
+</html>

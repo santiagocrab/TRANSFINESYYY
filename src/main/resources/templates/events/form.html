@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:include="layout :: layout">
+<head>
+    <style>
+        .time-section {
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-md);
+            padding: var(--spacing-lg);
+            margin-bottom: var(--spacing-lg);
+            background: var(--accent);
+        }
+        .time-section h4 {
+            margin-bottom: var(--spacing-md);
+            color: var(--dark-text);
+            font-size: 1rem;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            margin-bottom: var(--spacing-md);
+        }
+    </style>
+</head>
+<body>
+    <th:block th:fragment="content">
+        <div class="page-header">
+            <h1 class="page-title">
+                <i class="bi bi-calendar-plus"></i>
+                <span th:text="${event.eventID != null && event.eventID != '' ? 'Edit Event' : 'Create Event'}">Create Event</span>
+            </h1>
+            <a th:href="@{/events}" class="btn btn-secondary">Back</a>
+        </div>
+
+        <div class="card" style="max-width: 800px;">
+            <form th:action="@{/events/save}" th:object="${event}" method="post" id="eventForm">
+                <!-- Basic Info -->
+                <div class="form-group">
+                    <label class="form-label">Event ID <span style="color: var(--error);">*</span></label>
+                    <input type="text" th:field="*{eventID}" class="form-control" 
+                           th:readonly="${event.eventID != null && event.eventID != ''}" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Event Name <span style="color: var(--error);">*</span></label>
+                    <input type="text" th:field="*{eventName}" class="form-control" required>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--spacing-lg);">
+                    <div class="form-group">
+                        <label class="form-label">Date <span style="color: var(--error);">*</span></label>
+                        <input type="date" th:field="*{eventDate}" class="form-control" id="eventDate" required>
+                        <small class="form-text" style="color: #6B7280; font-size: 0.875rem; display: block; margin-top: 4px;">
+                            <i class="bi bi-info-circle"></i> Only today and future dates are allowed.
+                        </small>
+                    </div>
+                    <script th:inline="javascript">
+                        /*<![CDATA[*/
+                        (function() {
+                            // Calculate today's date in YYYY-MM-DD format
+                            const today = new Date();
+                            const year = today.getFullYear();
+                            const month = String(today.getMonth() + 1).padStart(2, '0');
+                            const day = String(today.getDate()).padStart(2, '0');
+                            const minDate = year + '-' + month + '-' + day;
+                            
+                            // Function to set min date
+                            function setMinDate() {
+                                const dateInput = document.getElementById('eventDate');
+                                if (dateInput) {
+                                    dateInput.setAttribute('min', minDate);
+                                    dateInput.min = minDate;
+                                    
+                                    // If current value is in the past, set to today
+                                    if (dateInput.value && dateInput.value < minDate) {
+                                        dateInput.value = minDate;
+                                    }
+                                    return true;
+                                }
+                                return false;
+                            }
+                            
+                            // Try immediately
+                            if (!setMinDate()) {
+                                // If element doesn't exist yet, try on DOMContentLoaded
+                                if (document.readyState === 'loading') {
+                                    document.addEventListener('DOMContentLoaded', setMinDate);
+                                } else {
+                                    // DOM already loaded, retry
+                                    setTimeout(setMinDate, 50);
+                                }
+                            }
+                            
+                            // Also store for later use
+                            window.minEventDate = minDate;
+                        })();
+                        /*]]>*/
+                    </script>
+                    <div class="form-group">
+                        <label class="form-label">Semester</label>
+                        <input type="number" th:field="*{semester}" class="form-control" min="1" max="2" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">School Year</label>
+                        <input type="text" th:field="*{schoolYear}" class="form-control" placeholder="2025-2026">
+                    </div>
+                </div>
+
+                <!-- Session Type -->
+                <div class="form-group">
+                    <label class="form-label">Session Type <span style="color: var(--error);">*</span></label>
+                    <select th:field="*{sessionType}" class="form-select" id="sessionType" onchange="updateSessionFields()" required>
+                        <option value="">Select Session Type</option>
+                        <option value="MORNING_ONLY">Morning Only</option>
+                        <option value="AFTERNOON_ONLY">Afternoon Only</option>
+                        <option value="BOTH">Both (Morning & Afternoon)</option>
+                    </select>
+                </div>
+
+                <!-- Morning Session Start-Stop Times -->
+                <div class="time-section" id="morningSection" style="display: none;">
+                    <h4>Morning Session - Start-Stop Times</h4>
+                    
+                    <div style="margin-bottom: var(--spacing-md);">
+                        <h5 style="font-size: 0.9rem; margin-bottom: var(--spacing-sm); color: var(--dark-text);">Time-In Window</h5>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md);">
+                            <div class="form-group">
+                                <label class="form-label">Start Time</label>
+                                <input type="time" th:field="*{timeInStartAM}" class="form-control" id="timeInStartAM">
+                                <button type="button" class="btn btn-secondary btn-sm" style="margin-top: var(--spacing-xs);" onclick="setCurrentTime('timeInStartAM')">
+                                    <i class="bi bi-clock"></i> Use Current Time
+                                </button>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Stop Time</label>
+                                <input type="time" th:field="*{timeInStopAM}" class="form-control" id="timeInStopAM">
+                                <button type="button" class="btn btn-secondary btn-sm" style="margin-top: var(--spacing-xs);" onclick="setCurrentTime('timeInStopAM')">
+                                    <i class="bi bi-clock"></i> Use Current Time
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h5 style="font-size: 0.9rem; margin-bottom: var(--spacing-sm); color: var(--dark-text);">Time-Out Window</h5>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md);">
+                            <div class="form-group">
+                                <label class="form-label">Start Time</label>
+                                <input type="time" th:field="*{timeOutStartAM}" class="form-control" id="timeOutStartAM">
+                                <button type="button" class="btn btn-secondary btn-sm" style="margin-top: var(--spacing-xs);" onclick="setCurrentTime('timeOutStartAM')">
+                                    <i class="bi bi-clock"></i> Use Current Time
+                                </button>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Stop Time</label>
+                                <input type="time" th:field="*{timeOutStopAM}" class="form-control" id="timeOutStopAM">
+                                <button type="button" class="btn btn-secondary btn-sm" style="margin-top: var(--spacing-xs);" onclick="setCurrentTime('timeOutStopAM')">
+                                    <i class="bi bi-clock"></i> Use Current Time
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Afternoon Session Start-Stop Times -->
+                <div class="time-section" id="afternoonSection" style="display: none;">
+                    <h4>Afternoon Session - Start-Stop Times</h4>
+                    
+                    <div style="margin-bottom: var(--spacing-md);">
+                        <h5 style="font-size: 0.9rem; margin-bottom: var(--spacing-sm); color: var(--dark-text);">Time-In Window</h5>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md);">
+                            <div class="form-group">
+                                <label class="form-label">Start Time</label>
+                                <input type="time" th:field="*{timeInStartPM}" class="form-control" id="timeInStartPM">
+                                <button type="button" class="btn btn-secondary btn-sm" style="margin-top: var(--spacing-xs);" onclick="setCurrentTime('timeInStartPM')">
+                                    <i class="bi bi-clock"></i> Use Current Time
+                                </button>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Stop Time</label>
+                                <input type="time" th:field="*{timeInStopPM}" class="form-control" id="timeInStopPM">
+                                <button type="button" class="btn btn-secondary btn-sm" style="margin-top: var(--spacing-xs);" onclick="setCurrentTime('timeInStopPM')">
+                                    <i class="bi bi-clock"></i> Use Current Time
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h5 style="font-size: 0.9rem; margin-bottom: var(--spacing-sm); color: var(--dark-text);">Time-Out Window</h5>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md);">
+                            <div class="form-group">
+                                <label class="form-label">Start Time</label>
+                                <input type="time" th:field="*{timeOutStartPM}" class="form-control" id="timeOutStartPM">
+                                <button type="button" class="btn btn-secondary btn-sm" style="margin-top: var(--spacing-xs);" onclick="setCurrentTime('timeOutStartPM')">
+                                    <i class="bi bi-clock"></i> Use Current Time
+                                </button>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Stop Time</label>
+                                <input type="time" th:field="*{timeOutStopPM}" class="form-control" id="timeOutStopPM">
+                                <button type="button" class="btn btn-secondary btn-sm" style="margin-top: var(--spacing-xs);" onclick="setCurrentTime('timeOutStopPM')">
+                                    <i class="bi bi-clock"></i> Use Current Time
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Fine Amounts -->
+                <div class="time-section">
+                    <h4>Fine Amounts</h4>
+                    <div class="checkbox-group" style="margin-bottom: var(--spacing-md); padding: var(--spacing-sm); background: #f8f9fa; border-radius: var(--radius-sm);">
+                        <input type="checkbox" id="useDefaultFines" onchange="toggleDefaultFines()" 
+                               th:checked="${event.fineAmountAbsent == null && event.fineAmountLate == null}">
+                        <label for="useDefaultFines" style="margin: 0; cursor: pointer; font-weight: 500;">
+                            <i class="bi bi-check-square"></i> Use Default Fine Amounts
+                        </label>
+                        <small style="color: #6B7280; margin-left: var(--spacing-sm);">
+                            (Absent: ₱100.00 | Late: ₱2.00 per minute, minimum ₱20.00)
+                        </small>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-md);">
+                        <div class="form-group">
+                            <label class="form-label">Fine for Absent (₱)</label>
+                            <input type="number" th:field="*{fineAmountAbsent}" id="fineAmountAbsent" 
+                                   class="form-control" step="0.01" min="0" placeholder="0.00">
+                            <small class="form-text" style="color: #6B7280; font-size: 0.875rem; display: block; margin-top: 4px;">
+                                Leave empty to use default (₱100.00)
+                            </small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Fine for Late (₱ per minute)</label>
+                            <input type="number" th:field="*{fineAmountLate}" id="fineAmountLate" 
+                                   class="form-control" step="0.01" min="0" placeholder="0.00">
+                            <small class="form-text" style="color: #6B7280; font-size: 0.875rem; display: block; margin-top: 4px;">
+                                Leave empty to use default (₱2.00/min, min ₱20.00)
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div style="display: flex; justify-content: flex-end; gap: var(--spacing-md); margin-top: var(--spacing-xl);">
+                    <a th:href="@{/events}" class="btn btn-secondary">Cancel</a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-save"></i>
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <script>
+            // Initialize session fields based on session type
+            document.addEventListener('DOMContentLoaded', function() {
+                updateSessionFields();
+                initializeDateValidation();
+            });
+
+            function initializeDateValidation() {
+                const dateInput = document.getElementById('eventDate');
+                if (!dateInput) {
+                    // Retry after a short delay
+                    setTimeout(initializeDateValidation, 100);
+                    return;
+                }
+                
+                // Get today's date in YYYY-MM-DD format
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); // Set to midnight to avoid timezone issues
+                const year = today.getFullYear();
+                const month = String(today.getMonth() + 1).padStart(2, '0');
+                const day = String(today.getDate()).padStart(2, '0');
+                const minDate = year + '-' + month + '-' + day;
+                
+                // Use stored minDate if available (from inline script)
+                const finalMinDate = window.minEventDate || minDate;
+                
+                // Force set min attribute multiple ways to ensure it works
+                dateInput.setAttribute('min', finalMinDate);
+                dateInput.min = finalMinDate;
+                dateInput.setAttribute('data-min-date', finalMinDate);
+                
+                // If the current value is in the past, set it to today
+                if (dateInput.value) {
+                    if (dateInput.value < finalMinDate) {
+                        dateInput.value = finalMinDate;
+                    }
+                }
+                
+                // Add validation on input change (most important)
+                dateInput.addEventListener('change', function() {
+                    validateAndFixDate(dateInput, finalMinDate);
+                });
+                
+                // Add validation on blur (when user leaves the field)
+                dateInput.addEventListener('blur', function() {
+                    validateAndFixDate(dateInput, finalMinDate);
+                });
+                
+                // Add validation on input (catches typing)
+                dateInput.addEventListener('input', function() {
+                    if (dateInput.value && dateInput.value.length >= 10) {
+                        validateAndFixDate(dateInput, finalMinDate);
+                    }
+                });
+                
+                // Add validation on paste (if user pastes a date)
+                dateInput.addEventListener('paste', function(e) {
+                    setTimeout(function() {
+                        validateAndFixDate(dateInput, finalMinDate);
+                    }, 10);
+                });
+                
+                // Add validation before form submit (critical)
+                const form = document.getElementById('eventForm');
+                if (form) {
+                    form.addEventListener('submit', function(e) {
+                        if (!validateAndFixDate(dateInput, finalMinDate, true)) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return false;
+                        }
+                    });
+                }
+                
+                // Periodic check (every 500ms) to catch any edge cases
+                setInterval(function() {
+                    if (dateInput.value && dateInput.value < finalMinDate) {
+                        dateInput.value = finalMinDate;
+                    }
+                }, 500);
+            }
+            
+            function validateAndFixDate(dateInput, minDate, isSubmit) {
+                if (!dateInput.value) {
+                    return true; // Let required attribute handle empty values
+                }
+                
+                if (dateInput.value < minDate) {
+                    if (isSubmit) {
+                        alert('Event date cannot be in the past. Please select today or a future date.');
+                    } else {
+                        // Show a less intrusive message for non-submit events
+                        const message = 'Date cannot be in the past. Setting to today.';
+                        console.warn(message);
+                    }
+                    dateInput.value = minDate;
+                    dateInput.focus();
+                    // Force re-set min attribute
+                    dateInput.setAttribute('min', minDate);
+                    dateInput.min = minDate;
+                    return false;
+                }
+                
+                return true;
+            }
+
+            function updateSessionFields() {
+                const sessionType = document.getElementById('sessionType').value;
+                const morningSection = document.getElementById('morningSection');
+                const afternoonSection = document.getElementById('afternoonSection');
+                
+                // Hide both sections first
+                morningSection.style.display = 'none';
+                afternoonSection.style.display = 'none';
+                
+                // Show based on session type
+                if (sessionType === 'MORNING_ONLY' || sessionType === 'BOTH') {
+                    morningSection.style.display = 'block';
+                }
+                if (sessionType === 'AFTERNOON_ONLY' || sessionType === 'BOTH') {
+                    afternoonSection.style.display = 'block';
+                }
+            }
+
+            function setCurrentTime(fieldId) {
+                const now = new Date();
+                const hours = String(now.getHours()).padStart(2, '0');
+                const minutes = String(now.getMinutes()).padStart(2, '0');
+                const timeString = hours + ':' + minutes;
+                document.getElementById(fieldId).value = timeString;
+            }
+
+            // Default fine amounts (matching FineService constants)
+            const DEFAULT_FINE_ABSENT = 100.0;
+            const DEFAULT_FINE_PER_MINUTE_LATE = 2.0;
+
+            function toggleDefaultFines() {
+                const useDefault = document.getElementById('useDefaultFines').checked;
+                const absentInput = document.getElementById('fineAmountAbsent');
+                const lateInput = document.getElementById('fineAmountLate');
+                
+                if (useDefault) {
+                    // Clear values to use defaults (null in backend = use defaults)
+                    absentInput.value = '';
+                    lateInput.value = '';
+                    // Disable inputs
+                    absentInput.disabled = true;
+                    lateInput.disabled = true;
+                    // Add visual indicator
+                    absentInput.style.backgroundColor = '#f8f9fa';
+                    lateInput.style.backgroundColor = '#f8f9fa';
+                    absentInput.style.cursor = 'not-allowed';
+                    lateInput.style.cursor = 'not-allowed';
+                } else {
+                    // Enable inputs for custom values
+                    absentInput.disabled = false;
+                    lateInput.disabled = false;
+                    // Remove visual indicator
+                    absentInput.style.backgroundColor = '';
+                    lateInput.style.backgroundColor = '';
+                    absentInput.style.cursor = '';
+                    lateInput.style.cursor = '';
+                    // Focus on first input
+                    absentInput.focus();
+                }
+            }
+
+            // Initialize on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                const absentInput = document.getElementById('fineAmountAbsent');
+                const lateInput = document.getElementById('fineAmountLate');
+                const useDefaultCheckbox = document.getElementById('useDefaultFines');
+                
+                // Get current values
+                const absentValue = absentInput.value ? parseFloat(absentInput.value) : null;
+                const lateValue = lateInput.value ? parseFloat(lateInput.value) : null;
+                
+                // If both fields are empty/null, check the default checkbox
+                if ((absentValue === null || absentValue === 0 || absentValue === '') && 
+                    (lateValue === null || lateValue === 0 || lateValue === '')) {
+                    useDefaultCheckbox.checked = true;
+                    toggleDefaultFines();
+                } else {
+                    // If values exist, uncheck and enable inputs (custom values)
+                    useDefaultCheckbox.checked = false;
+                    absentInput.disabled = false;
+                    lateInput.disabled = false;
+                }
+            });
+
+            // Handle form submission - ensure disabled fields are cleared
+            document.getElementById('eventForm').addEventListener('submit', function(e) {
+                const absentInput = document.getElementById('fineAmountAbsent');
+                const lateInput = document.getElementById('fineAmountLate');
+                const useDefault = document.getElementById('useDefaultFines').checked;
+                
+                if (useDefault) {
+                    // Clear values so backend receives null and uses defaults
+                    absentInput.value = '';
+                    lateInput.value = '';
+                }
+            });
+        </script>
+    </th:block>
+</body>
+</html>

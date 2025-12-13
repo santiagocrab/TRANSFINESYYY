@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:include="layout :: layout">
+<head>
+    <style>
+        .rfid-scanner {
+            background: var(--white);
+            border: 2px dashed var(--border-color);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-3xl);
+            text-align: center;
+            margin-bottom: var(--spacing-xl);
+            transition: all var(--transition-base);
+        }
+        .rfid-scanner.active {
+            border-color: var(--primary);
+            background: rgba(255, 106, 0, 0.02);
+        }
+        .rfid-input {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto var(--spacing-lg);
+            padding: 1.25rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+            text-align: center;
+            letter-spacing: 2px;
+            border: 2px solid var(--border-color);
+            border-radius: var(--radius-md);
+            transition: all var(--transition-base);
+        }
+        .rfid-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(255, 106, 0, 0.1);
+        }
+        .scan-result {
+            padding: var(--spacing-lg);
+            border-radius: var(--radius-md);
+            margin-top: var(--spacing-lg);
+            font-weight: 500;
+            display: none;
+        }
+        .scan-result.show {
+            display: block;
+        }
+        .scan-result.success {
+            background: var(--success-light);
+            color: var(--success);
+            border: 1px solid var(--success);
+        }
+        .scan-result.warning {
+            background: var(--warning-light);
+            color: var(--warning);
+            border: 1px solid var(--warning);
+        }
+        .scan-result.error {
+            background: var(--error-light);
+            color: var(--error);
+            border: 1px solid var(--error);
+        }
+        .attendance-section {
+            margin-bottom: var(--spacing-xl);
+        }
+        .attendance-table-section {
+            transition: all 0.3s ease;
+        }
+        .badge-info {
+            background-color: #3B82F6;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+        .badge-secondary {
+            background-color: #6B7280;
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <th:block th:fragment="content">
+        <!-- Hidden input for eventId to ensure it's available in JavaScript -->
+        <input type="hidden" id="eventIdInput" th:value="${event.eventID}" data-event-id="${event.eventID}">
+        
+        <div class="page-header">
+            <h1 class="page-title">
+                <i class="bi bi-clipboard-check"></i>
+                <span th:text="${event.eventName} + ' (' + ${event.eventID} + ')'">Event Attendance</span>
+            </h1>
+            <a th:href="@{/events}" class="btn btn-secondary">Back to Events</a>
+        </div>
+
+        <div th:if="${successMessage}" class="alert alert-success">
+            <i class="bi bi-check-circle"></i>
+            <span th:text="${successMessage}"></span>
+        </div>
+        <div th:if="${errorMessage}" class="alert alert-error">
+            <i class="bi bi-exclamation-circle"></i>
+            <span th:text="${errorMessage}"></span>
+        </div>
+
+        <!-- Finalized Status Banner -->
+        <div th:if="${event.finalized}" class="alert alert-warning" style="background-color: #FFF3CD; border: 1px solid #FFC107; color: #856404; padding: var(--spacing-md); border-radius: var(--radius-md); margin-bottom: var(--spacing-lg);">
+            <i class="bi bi-lock-fill"></i>
+            <strong>Event Finalized</strong> - Attendance recording is disabled. All fines have been computed.
+        </div>
+
+        <!-- Event Session Info -->
+        <div class="card mb-xl" th:if="${event.sessionType != null}">
+            <div class="card-header">
+                <h3 class="card-title">Attendance Windows</h3>
+            </div>
+            <div class="card-body">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-xl);">
+                    <!-- Morning Session -->
+                    <div th:if="${event.sessionType.name() == 'MORNING_ONLY' or event.sessionType.name() == 'BOTH'}">
+                        <h4 style="margin-bottom: var(--spacing-md); color: var(--dark-text);">Morning Session</h4>
+                        <div style="margin-bottom: var(--spacing-md);">
+                            <strong>Time-In:</strong> 
+                            <span th:if="${event.timeInStartAM != null and event.timeInStopAM != null}"
+                                  th:text="${#temporals.format(event.timeInStartAM, 'HH:mm')} + ' - ' + ${#temporals.format(event.timeInStopAM, 'HH:mm')}">-</span>
+                            <span th:if="${event.timeInStartAM == null or event.timeInStopAM == null}">Not set</span>
+                        </div>
+                        <div style="margin-bottom: var(--spacing-md);">
+                            <strong>Time-Out:</strong> 
+                            <span th:if="${event.timeOutStartAM != null and event.timeOutStopAM != null}"
+                                  th:text="${#temporals.format(event.timeOutStartAM, 'HH:mm')} + ' - ' + ${#temporals.format(event.timeOutStopAM, 'HH:mm')}">-</span>
+                            <span th:if="${event.timeOutStartAM == null or event.timeOutStopAM == null}">Not set</span>
+                        </div>
+                        <div style="display: flex; gap: var(--spacing-sm); flex-wrap: wrap;">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="openWindow('AM', true)">
+                                <i class="bi bi-play-circle"></i> Open AM Time-In
+                            </button>
+                            <form th:action="@{/attendance/mark-absentees/{id}(id=${event.eventID})}" method="post" style="display: inline;">
+                                <input type="hidden" name="sessionType" value="AM">
+                                <input type="hidden" name="isTimeIn" value="true">
+                                <button type="submit" class="btn btn-secondary btn-sm" 
+                                        onclick="return confirm('Mark absentees for AM Time-In?');">
+                                    <i class="bi bi-check-circle"></i> Done AM Time-In
+                                </button>
+                            </form>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="openWindow('AM', false)">
+                                <i class="bi bi-play-circle"></i> Open AM Time-Out
+                            </button>
+                            <form th:action="@{/attendance/mark-absentees/{id}(id=${event.eventID})}" method="post" style="display: inline;">
+                                <input type="hidden" name="sessionType" value="AM">
+                                <input type="hidden" name="isTimeIn" value="false">
+                                <button type="submit" class="btn btn-secondary btn-sm"
+                                        onclick="return confirm('Mark absentees for AM Time-Out?');">
+                                    <i class="bi bi-check-circle"></i> Done AM Time-Out
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <!-- Afternoon Session -->
+                    <div th:if="${event.sessionType.name() == 'AFTERNOON_ONLY' or event.sessionType.name() == 'BOTH'}">
+                        <h4 style="margin-bottom: var(--spacing-md); color: var(--dark-text);">Afternoon Session</h4>
+                        <div style="margin-bottom: var(--spacing-md);">
+                            <strong>Time-In:</strong> 
+                            <span th:if="${event.timeInStartPM != null and event.timeInStopPM != null}"
+                                  th:text="${#temporals.format(event.timeInStartPM, 'HH:mm')} + ' - ' + ${#temporals.format(event.timeInStopPM, 'HH:mm')}">-</span>
+                            <span th:if="${event.timeInStartPM == null or event.timeInStopPM == null}">Not set</span>
+                        </div>
+                        <div style="margin-bottom: var(--spacing-md);">
+                            <strong>Time-Out:</strong> 
+                            <span th:if="${event.timeOutStartPM != null and event.timeOutStopPM != null}"
+                                  th:text="${#temporals.format(event.timeOutStartPM, 'HH:mm')} + ' - ' + ${#temporals.format(event.timeOutStopPM, 'HH:mm')}">-</span>
+                            <span th:if="${event.timeOutStartPM == null or event.timeOutStopPM == null}">Not set</span>
+                        </div>
+                        <div style="display: flex; gap: var(--spacing-sm); flex-wrap: wrap;">
+                            <button type="button" class="btn btn-primary btn-sm" onclick="openWindow('PM', true)">
+                                <i class="bi bi-play-circle"></i> Open PM Time-In
+                            </button>
+                            <form th:action="@{/attendance/mark-absentees/{id}(id=${event.eventID})}" method="post" style="display: inline;">
+                                <input type="hidden" name="sessionType" value="PM">
+                                <input type="hidden" name="isTimeIn" value="true">
+                                <button type="submit" class="btn btn-secondary btn-sm"
+                                        onclick="return confirm('Mark absentees for PM Time-In?');">
+                                    <i class="bi bi-check-circle"></i> Done PM Time-In
+                                </button>
+                            </form>
+                            <button type="button" class="btn btn-primary btn-sm" onclick="openWindow('PM', false)">
+                                <i class="bi bi-play-circle"></i> Open PM Time-Out
+                            </button>
+                            <form th:action="@{/attendance/mark-absentees/{id}(id=${event.eventID})}" method="post" style="display: inline;">
+                                <input type="hidden" name="sessionType" value="PM">
+                                <input type="hidden" name="isTimeIn" value="false">
+                                <button type="submit" class="btn btn-secondary btn-sm"
+                                        onclick="return confirm('Mark absentees for PM Time-Out?');">
+                                    <i class="bi bi-check-circle"></i> Done PM Time-Out
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RFID Scanner -->
+        <div class="rfid-scanner" id="rfidScanner" th:classappend="${event.finalized ? 'disabled' : ''}" 
+             th:style="${event.finalized ? 'opacity: 0.6; pointer-events: none;' : ''}">
+            <h3 style="margin-bottom: var(--spacing-lg); color: var(--dark-text);">RFID Scanner</h3>
+            <div th:if="${event.finalized}" style="background-color: #FFC107; color: #856404; padding: var(--spacing-md); border-radius: var(--radius-md); margin-bottom: var(--spacing-md);">
+                <i class="bi bi-lock-fill"></i> Scanner disabled - Event is finalized
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <label class="form-label">Current Session:</label>
+                <select id="currentSession" class="form-select" style="max-width: 200px; margin: 0 auto;" th:disabled="${event.finalized}">
+                    <option value="AM">Morning (AM)</option>
+                    <option value="PM">Afternoon (PM)</option>
+                </select>
+            </div>
+            <div style="margin-bottom: var(--spacing-md);">
+                <label class="form-label">Type:</label>
+                <select id="isTimeIn" class="form-select" style="max-width: 200px; margin: 0 auto;" th:disabled="${event.finalized}">
+                    <option value="true">Time-In</option>
+                    <option value="false">Time-Out</option>
+                </select>
+            </div>
+            <input type="text" id="rfidInput" class="rfid-input" 
+                   placeholder="Scan or enter RFID tag..." autofocus th:disabled="${event.finalized}">
+            <button type="button" class="btn btn-primary" onclick="scanRFID()" th:disabled="${event.finalized}">
+                <i class="bi bi-upc-scan"></i>
+                Scan RFID
+            </button>
+            <div id="scanResult" class="scan-result"></div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-bar">
+            <a th:href="@{/attendance/event/{id}(id=${event.eventID})}" class="btn btn-secondary">
+                <i class="bi bi-arrow-clockwise"></i>
+                Refresh
+            </a>
+            <form th:if="${!event.finalized}" th:action="@{/attendance/finalize/{id}(id=${event.eventID})}" method="post" style="display: inline;"
+                  onsubmit="return confirm('Finalize this event? This will mark all students without attendance as ABSENT and generate fines. No further attendance can be recorded.');">
+                <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i>
+                    Finalize Event & Compute Fines
+                </button>
+            </form>
+            <form th:if="${event.finalized}" th:action="@{/attendance/regenerate-fines/{id}(id=${event.eventID})}" method="post" style="display: inline;"
+                  onsubmit="return confirm('Regenerate fines for this event? This will delete existing fines and create new ones based on current attendance records.');">
+                <button type="submit" class="btn btn-warning">
+                    <i class="bi bi-arrow-clockwise"></i>
+                    Regenerate Fines
+                </button>
+            </form>
+            <div th:if="${event.finalized}" class="btn btn-success" style="cursor: default; margin-left: var(--spacing-sm);">
+                <i class="bi bi-check-circle-fill"></i>
+                Event Finalized
+            </div>
+        </div>
+
+        <!-- Attendance History Summary -->
+        <div class="card" style="margin-bottom: var(--spacing-xl);">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="bi bi-clock-history"></i>
+                    Attendance History & Fines Summary
+                </h3>
+            </div>
+            <div class="card-body">
+                <!-- Filter Tabs -->
+                <div style="display: flex; gap: var(--spacing-md); margin-bottom: var(--spacing-lg); flex-wrap: wrap;">
+                    <button class="btn btn-outline-danger" onclick="filterByStatus('ABSENT')" id="filterAbsent">
+                        <i class="bi bi-x-circle"></i> Absent 
+                        <span class="badge" th:text="${#lists.size(absentStudents)}">0</span>
+                        <span class="badge" th:text="'₱' + ${#numbers.formatDecimal(totalAbsentFine, 0, 'COMMA', 2, 'POINT')}">₱0.00</span>
+                    </button>
+                    <button class="btn btn-outline-warning" onclick="filterByStatus('LATE')" id="filterLate">
+                        <i class="bi bi-clock"></i> Late 
+                        <span class="badge" th:text="${#lists.size(lateStudents)}">0</span>
+                        <span class="badge" th:text="'₱' + ${#numbers.formatDecimal(totalLateFine, 0, 'COMMA', 2, 'POINT')}">₱0.00</span>
+                    </button>
+                    <button class="btn btn-outline-success" onclick="filterByStatus('PRESENT')" id="filterPresent">
+                        <i class="bi bi-check-circle"></i> Present 
+                        <span class="badge" th:text="${#lists.size(presentStudents)}">0</span>
+                        <span class="badge" th:text="'₱' + ${#numbers.formatDecimal(totalPresentFine, 0, 'COMMA', 2, 'POINT')}">₱0.00</span>
+                    </button>
+                    <button class="btn btn-secondary" onclick="filterByStatus('ALL')" id="filterAll">
+                        <i class="bi bi-list"></i> Show All
+                    </button>
+                </div>
+
+                <!-- Absent Students -->
+                <div id="absentSection" class="status-section" style="display: none;">
+                    <h4 style="color: var(--error); margin-bottom: var(--spacing-md);">
+                        <i class="bi bi-x-circle"></i> Absent Students 
+                        <span style="font-size: 0.9em; color: #666;">(Total Fine: ₱<span th:text="${#numbers.formatDecimal(totalAbsentFine, 0, 'COMMA', 2, 'POINT')}">0.00</span>)</span>
+                    </h4>
+                    <div class="table-wrapper">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Student ID</th>
+                                    <th>Name</th>
+                                    <th>Course</th>
+                                    <th>Year</th>
+                                    <th>Section</th>
+                                    <th>Session</th>
+                                    <th>Checkpoints Completed</th>
+                                    <th>Late Minutes</th>
+                                    <th>Status</th>
+                                    <th>Fine Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:if="${#lists.isEmpty(absentStudents)}">
+                                    <td colspan="10" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">
+                                        No absent students.
+                                    </td>
+                                </tr>
+                                <tr th:each="item : ${absentStudents}" 
+                                    th:with="student=${item['student']}, status=${item['status']}, fineAmount=${item['fineAmount'] != null ? item['fineAmount'] : 0.0}, checkpointDisplay=${item['checkpointDisplay'] != null ? item['checkpointDisplay'] : '0/2'}, sessionType=${item['sessionType'] != null ? item['sessionType'] : 'BOTH'}, totalLateMinutes=${item['totalLateMinutes'] != null ? item['totalLateMinutes'] : 0}">
+                                    <td th:text="${student?.studID}">STUD001</td>
+                                    <td th:text="${student?.fullName}">Student Name</td>
+                                    <td th:text="${student?.course ?: '-'}">-</td>
+                                    <td th:text="${student?.yearLevel ?: '-'}">-</td>
+                                    <td th:text="${student?.section ?: '-'}">-</td>
+                                    <td>
+                                        <span th:if="${event?.sessionType?.name() == 'MORNING_ONLY'}" class="badge badge-info">AM</span>
+                                        <span th:if="${event?.sessionType?.name() == 'AFTERNOON_ONLY'}" class="badge badge-info">PM</span>
+                                        <span th:if="${event?.sessionType?.name() == 'BOTH'}" class="badge badge-primary">BOTH</span>
+                                    </td>
+                                    <td>
+                                        <span style="font-weight: 600; font-size: 1.05em;" th:text="${checkpointDisplay}">0/2</span>
+                                    </td>
+                                    <td th:text="${totalLateMinutes}">0</td>
+                                    <td>
+                                        <span class="badge badge-error" th:text="${status}">ABSENT</span>
+                                    </td>
+                                    <td style="font-weight: 600; color: var(--error);">
+                                        ₱<span th:text="${#numbers.formatDecimal(fineAmount, 0, 'COMMA', 2, 'POINT')}">0.00</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Late Students -->
+                <div id="lateSection" class="status-section" style="display: none;">
+                    <h4 style="color: var(--warning); margin-bottom: var(--spacing-md);">
+                        <i class="bi bi-clock"></i> Late Students 
+                        <span style="font-size: 0.9em; color: #666;">(Total Fine: ₱<span th:text="${#numbers.formatDecimal(totalLateFine, 0, 'COMMA', 2, 'POINT')}">0.00</span>)</span>
+                    </h4>
+                    <div class="table-wrapper">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Student ID</th>
+                                    <th>Name</th>
+                                    <th>Course</th>
+                                    <th>Year</th>
+                                    <th>Section</th>
+                                    <th>Session</th>
+                                    <th>Checkpoints Completed</th>
+                                    <th>Late Minutes</th>
+                                    <th>Status</th>
+                                    <th>Fine Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:if="${#lists.isEmpty(lateStudents)}">
+                                    <td colspan="10" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">
+                                        No late students.
+                                    </td>
+                                </tr>
+                                <tr th:each="item : ${lateStudents}" 
+                                    th:with="student=${item['student']}, status=${item['status']}, fineAmount=${item['fineAmount'] != null ? item['fineAmount'] : 0.0}, checkpointDisplay=${item['checkpointDisplay'] != null ? item['checkpointDisplay'] : '0/2'}, sessionType=${item['sessionType'] != null ? item['sessionType'] : 'BOTH'}, totalLateMinutes=${item['totalLateMinutes'] != null ? item['totalLateMinutes'] : 0}">
+                                    <td th:text="${student?.studID}">STUD001</td>
+                                    <td th:text="${student?.fullName}">Student Name</td>
+                                    <td th:text="${student?.course ?: '-'}">-</td>
+                                    <td th:text="${student?.yearLevel ?: '-'}">-</td>
+                                    <td th:text="${student?.section ?: '-'}">-</td>
+                                    <td>
+                                        <span th:if="${event?.sessionType?.name() == 'MORNING_ONLY'}" class="badge badge-info">AM</span>
+                                        <span th:if="${event?.sessionType?.name() == 'AFTERNOON_ONLY'}" class="badge badge-info">PM</span>
+                                        <span th:if="${event?.sessionType?.name() == 'BOTH'}" class="badge badge-primary">BOTH</span>
+                                    </td>
+                                    <td>
+                                        <span style="font-weight: 600; font-size: 1.05em;" th:text="${checkpointDisplay}">0/2</span>
+                                    </td>
+                                    <td th:text="${totalLateMinutes}">0</td>
+                                    <td>
+                                        <span class="badge badge-warning" th:text="${status}">LATE</span>
+                                    </td>
+                                    <td style="font-weight: 600; color: var(--warning);">
+                                        ₱<span th:text="${#numbers.formatDecimal(fineAmount, 0, 'COMMA', 2, 'POINT')}">0.00</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Present Students -->
+                <div id="presentSection" class="status-section" style="display: none;">
+                    <h4 style="color: var(--success); margin-bottom: var(--spacing-md);">
+                        <i class="bi bi-check-circle"></i> Present Students 
+                        <span style="font-size: 0.9em; color: #666;">(Total Fine: ₱<span th:text="${#numbers.formatDecimal(totalPresentFine, 0, 'COMMA', 2, 'POINT')}">0.00</span>)</span>
+                    </h4>
+                    <div class="table-wrapper">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Student ID</th>
+                                    <th>Name</th>
+                                    <th>Course</th>
+                                    <th>Year</th>
+                                    <th>Section</th>
+                                    <th>Session</th>
+                                    <th>Checkpoints Completed</th>
+                                    <th>Late Minutes</th>
+                                    <th>Status</th>
+                                    <th>Fine Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:if="${#lists.isEmpty(presentStudents)}">
+                                    <td colspan="10" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">
+                                        No present students.
+                                    </td>
+                                </tr>
+                                <tr th:each="item : ${presentStudents}" 
+                                    th:with="student=${item['student']}, status=${item['status']}, fineAmount=${item['fineAmount'] != null ? item['fineAmount'] : 0.0}, checkpointDisplay=${item['checkpointDisplay'] != null ? item['checkpointDisplay'] : '2/2'}, sessionType=${item['sessionType'] != null ? item['sessionType'] : 'BOTH'}, totalLateMinutes=${item['totalLateMinutes'] != null ? item['totalLateMinutes'] : 0}">
+                                    <td th:text="${student?.studID}">STUD001</td>
+                                    <td th:text="${student?.fullName}">Student Name</td>
+                                    <td th:text="${student?.course ?: '-'}">-</td>
+                                    <td th:text="${student?.yearLevel ?: '-'}">-</td>
+                                    <td th:text="${student?.section ?: '-'}">-</td>
+                                    <td>
+                                        <span th:if="${event?.sessionType?.name() == 'MORNING_ONLY'}" class="badge badge-info">AM</span>
+                                        <span th:if="${event?.sessionType?.name() == 'AFTERNOON_ONLY'}" class="badge badge-info">PM</span>
+                                        <span th:if="${event?.sessionType?.name() == 'BOTH'}" class="badge badge-primary">BOTH</span>
+                                    </td>
+                                    <td>
+                                        <span style="font-weight: 600; font-size: 1.05em;" th:text="${checkpointDisplay}">2/2</span>
+                                    </td>
+                                    <td th:text="${totalLateMinutes}">0</td>
+                                    <td>
+                                        <span class="badge badge-success" th:text="${status}">PRESENT</span>
+                                    </td>
+                                    <td style="font-weight: 600; color: var(--success);">
+                                        ₱<span th:text="${#numbers.formatDecimal(fineAmount, 0, 'COMMA', 2, 'POINT')}">0.00</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Attendance Table -->
+        <div class="card">
+            <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: var(--spacing-md);">
+                <h3 class="card-title">Attendance Records</h3>
+                <div style="display: flex; gap: var(--spacing-md); align-items: center; flex-wrap: wrap;">
+                    <select id="sessionFilter" class="form-select" style="min-width: 120px;" onchange="applyFilters()">
+                        <option value="all">All Sessions</option>
+                        <option value="AM">AM Only</option>
+                        <option value="PM">PM Only</option>
+                    </select>
+                    <select id="timeTypeFilter" class="form-select" style="min-width: 120px;" onchange="applyFilters()">
+                        <option value="all">All Types</option>
+                        <option value="TIME_IN">Time-In Only</option>
+                        <option value="TIME_OUT">Time-Out Only</option>
+                    </select>
+                    <input type="text" id="attendanceSearch" class="form-control" 
+                           placeholder="Search by Student ID, Name, Course..." 
+                           style="min-width: 250px;">
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="clearFilters()">
+                        <i class="bi bi-x-circle"></i> Clear All
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- AM Attendance Section -->
+                <div th:if="${event.sessionType.name() == 'MORNING_ONLY' or event.sessionType.name() == 'BOTH'}" 
+                     class="attendance-section" data-session="AM">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md);">
+                        <h4 style="color: var(--primary); margin: 0;">
+                            <i class="bi bi-sunrise"></i> Morning (AM) Session
+                        </h4>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="toggleSection('AM')">
+                            <i class="bi bi-chevron-down" id="toggleIconAM"></i>
+                            <span id="toggleTextAM">Show Less</span>
+                        </button>
+                    </div>
+                    <div id="amSection" class="attendance-table-section">
+                        <div class="table-wrapper">
+                            <table class="table" id="amTable">
+                                <thead>
+                                    <tr>
+                                        <th>Student ID</th>
+                                        <th>Name</th>
+                                        <th>Course</th>
+                                        <th>Year</th>
+                                        <th>Section</th>
+                                        <th>Type</th>
+                                        <th>Status</th>
+                                        <th>Time</th>
+                                        <th>Source</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:if="${#lists.isEmpty(amAttendances)}">
+                                        <td colspan="9" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">
+                                            No AM attendance records yet.
+                                        </td>
+                                    </tr>
+                                    <tr th:each="attendance : ${amAttendances}" 
+                                        th:with="student=${studentMap.get(attendance.studID)}"
+                                        class="attendance-row"
+                                        data-student-id="${attendance.studID}"
+                                        data-student-name="${student != null ? student.fullName : attendance.studID}"
+                                        data-course="${student != null ? student.course : ''}">
+                                        <td th:text="${attendance.studID}">STUD001</td>
+                                        <td th:text="${student != null ? student.fullName : attendance.studID}">Student Name</td>
+                                        <td th:text="${student != null ? student.course : '-'}">-</td>
+                                        <td th:text="${student != null ? student.yearLevel : '-'}">-</td>
+                                        <td th:text="${student != null ? student.section : '-'}">-</td>
+                                        <td>
+                                            <span class="badge" 
+                                                  th:classappend="${attendance.recordType == 'TIME_IN' ? 'badge-info' : 'badge-secondary'}"
+                                                  th:text="${attendance.recordType ?: 'N/A'}">TIME_IN</span>
+                                        </td>
+                                        <td>
+                                            <span th:if="${attendance.status.toString() == 'PRESENT'}" class="badge badge-success">PRESENT</span>
+                                            <span th:if="${attendance.status.toString() == 'LATE'}" class="badge badge-warning">LATE</span>
+                                            <span th:if="${attendance.status.toString() == 'ABSENT'}" class="badge badge-error">ABSENT</span>
+                                            <span th:if="${attendance.status.toString() == 'HALF_ABSENT_AM'}" class="badge badge-warning">HALF ABSENT (AM)</span>
+                                            <span th:if="${attendance.status.toString() == 'HALF_ABSENT_PM'}" class="badge badge-warning">HALF ABSENT (PM)</span>
+                                        </td>
+                                        <td>
+                                            <span th:if="${attendance.recordType == 'TIME_IN' and attendance.checkInTime != null}" 
+                                                  th:text="${#temporals.format(attendance.checkInTime, 'HH:mm')}">08:00</span>
+                                            <span th:if="${attendance.recordType == 'TIME_OUT' and attendance.checkOutTime != null}" 
+                                                  th:text="${#temporals.format(attendance.checkOutTime, 'HH:mm')}">12:00</span>
+                                            <span th:if="${attendance.checkInTime == null and attendance.checkOutTime == null}">N/A</span>
+                                        </td>
+                                        <td th:text="${attendance.scanSource ?: 'MANUAL'}">MANUAL</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- PM Attendance Section -->
+                <div th:if="${event.sessionType.name() == 'AFTERNOON_ONLY' or event.sessionType.name() == 'BOTH'}" 
+                     class="attendance-section" data-session="PM"
+                     th:style="${event.sessionType.name() == 'AFTERNOON_ONLY' or event.sessionType.name() == 'BOTH' ? '' : 'margin-top: var(--spacing-xl);'}">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-md);">
+                        <h4 style="color: var(--primary); margin: 0;">
+                            <i class="bi bi-sunset"></i> Afternoon (PM) Session
+                        </h4>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="toggleSection('PM')">
+                            <i class="bi bi-chevron-down" id="toggleIconPM"></i>
+                            <span id="toggleTextPM">Show Less</span>
+                        </button>
+                    </div>
+                    <div id="pmSection" class="attendance-table-section">
+                        <div class="table-wrapper">
+                            <table class="table" id="pmTable">
+                                <thead>
+                                    <tr>
+                                        <th>Student ID</th>
+                                        <th>Name</th>
+                                        <th>Course</th>
+                                        <th>Year</th>
+                                        <th>Section</th>
+                                        <th>Type</th>
+                                        <th>Status</th>
+                                        <th>Time</th>
+                                        <th>Source</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:if="${#lists.isEmpty(pmAttendances)}">
+                                        <td colspan="9" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">
+                                            No PM attendance records yet.
+                                        </td>
+                                    </tr>
+                                    <tr th:each="attendance : ${pmAttendances}" 
+                                        th:with="student=${studentMap.get(attendance.studID)}"
+                                        class="attendance-row"
+                                        data-student-id="${attendance.studID}"
+                                        data-student-name="${student != null ? student.fullName : attendance.studID}"
+                                        data-course="${student != null ? student.course : ''}">
+                                        <td th:text="${attendance.studID}">STUD001</td>
+                                        <td th:text="${student != null ? student.fullName : attendance.studID}">Student Name</td>
+                                        <td th:text="${student != null ? student.course : '-'}">-</td>
+                                        <td th:text="${student != null ? student.yearLevel : '-'}">-</td>
+                                        <td th:text="${student != null ? student.section : '-'}">-</td>
+                                        <td>
+                                            <span class="badge" 
+                                                  th:classappend="${attendance.recordType == 'TIME_IN' ? 'badge-info' : 'badge-secondary'}"
+                                                  th:text="${attendance.recordType ?: 'N/A'}">TIME_IN</span>
+                                        </td>
+                                        <td>
+                                            <span th:if="${attendance.status.toString() == 'PRESENT'}" class="badge badge-success">PRESENT</span>
+                                            <span th:if="${attendance.status.toString() == 'LATE'}" class="badge badge-warning">LATE</span>
+                                            <span th:if="${attendance.status.toString() == 'ABSENT'}" class="badge badge-error">ABSENT</span>
+                                            <span th:if="${attendance.status.toString() == 'HALF_ABSENT_AM'}" class="badge badge-warning">HALF ABSENT (AM)</span>
+                                            <span th:if="${attendance.status.toString() == 'HALF_ABSENT_PM'}" class="badge badge-warning">HALF ABSENT (PM)</span>
+                                        </td>
+                                        <td>
+                                            <span th:if="${attendance.recordType == 'TIME_IN' and attendance.checkInTime != null}" 
+                                                  th:text="${#temporals.format(attendance.checkInTime, 'HH:mm')}">13:00</span>
+                                            <span th:if="${attendance.recordType == 'TIME_OUT' and attendance.checkOutTime != null}" 
+                                                  th:text="${#temporals.format(attendance.checkOutTime, 'HH:mm')}">17:00</span>
+                                            <span th:if="${attendance.checkInTime == null and attendance.checkOutTime == null}">N/A</span>
+                                        </td>
+                                        <td th:text="${attendance.scanSource ?: 'MANUAL'}">MANUAL</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // Function to get eventId from multiple sources
+            function getEventId() {
+                let eventId = '';
+                
+                // Method 1: Try from hidden input (most reliable)
+                const eventIdInput = document.getElementById('eventIdInput');
+                if (eventIdInput) {
+                    eventId = eventIdInput.value || eventIdInput.getAttribute('data-event-id');
+                    if (eventId && eventId.trim() !== '') {
+                        return eventId.trim();
+                    }
+                }
+                
+                // Method 2: Extract from URL path
+                const urlPath = window.location.pathname;
+                const match = urlPath.match(/\/attendance\/event\/([^\/\?]+)/);
+                if (match && match[1]) {
+                    eventId = match[1].trim();
+                    if (eventId !== '') {
+                        return eventId;
+                    }
+                }
+                
+                // Method 3: Try from Thymeleaf inline (fallback)
+                try {
+                    const thymeleafEventId = /*[[${event?.eventID}]]*/ '';
+                    if (thymeleafEventId && thymeleafEventId.trim() !== '') {
+                        return thymeleafEventId.trim();
+                    }
+                } catch(e) {
+                    console.log('Thymeleaf eventId not available');
+                }
+                
+                return eventId;
+            }
+            
+            // Initialize eventId when DOM is ready
+            let eventId = '';
+            document.addEventListener('DOMContentLoaded', function() {
+                eventId = getEventId();
+                console.log('Event ID loaded:', eventId);
+                
+                if (!eventId || eventId.trim() === '') {
+                    console.error('Event ID could not be determined. URL:', window.location.pathname);
+                }
+            });
+            
+            // Also try immediately (in case DOM is already loaded)
+            eventId = getEventId();
+            console.log('Event ID (immediate):', eventId);
+            
+            const rfidInput = document.getElementById('rfidInput');
+            const scanResult = document.getElementById('scanResult');
+            const rfidScanner = document.getElementById('rfidScanner');
+
+            rfidInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    scanRFID();
+                }
+            });
+
+            let currentActiveSession = null;
+            let currentActiveType = null;
+
+            function openWindow(sessionType, isTimeIn) {
+                currentActiveSession = sessionType;
+                currentActiveType = isTimeIn;
+                document.getElementById('currentSession').value = sessionType;
+                document.getElementById('isTimeIn').value = isTimeIn.toString();
+                rfidInput.focus();
+                showResult('Window opened for ' + sessionType + ' ' + (isTimeIn ? 'Time-In' : 'Time-Out'), 'success');
+            }
+
+            function scanRFID() {
+                const rfidTag = rfidInput.value.trim();
+                if (!rfidTag) {
+                    showResult('Please enter RFID tag', 'error');
+                    return;
+                }
+
+                // Get eventId fresh each time (in case it wasn't set initially)
+                let currentEventId = getEventId();
+                
+                if (!currentEventId || currentEventId.trim() === '') {
+                    showResult('Error: Event ID is missing. Please refresh the page. URL: ' + window.location.pathname, 'error');
+                    console.error('Event ID not found. URL:', window.location.pathname);
+                    console.error('Available elements:', {
+                        eventIdInput: document.getElementById('eventIdInput'),
+                        urlPath: window.location.pathname
+                    });
+                    return;
+                }
+                
+                // Update the global eventId variable
+                eventId = currentEventId;
+
+                const sessionType = document.getElementById('currentSession').value;
+                const isTimeIn = document.getElementById('isTimeIn').value === 'true';
+
+                rfidScanner.classList.add('active');
+                scanResult.className = 'scan-result';
+                scanResult.textContent = 'Scanning...';
+                scanResult.classList.add('show', 'info');
+
+                fetch('/attendance/scan-rfid-window', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'rfidTag=' + encodeURIComponent(rfidTag) + 
+                          '&eventId=' + encodeURIComponent(eventId.trim()) +
+                          '&sessionType=' + encodeURIComponent(sessionType) +
+                          '&isTimeIn=' + encodeURIComponent(isTimeIn)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        let message = '✓ ' + data.studentName + ' - ' + data.status;
+                        if (data.status === 'LATE') {
+                            message += ' (' + data.minutesLate + ' min late)';
+                            showResult(message, 'warning');
+                        } else if (data.status === 'PRESENT') {
+                            showResult(message, 'success');
+                        } else {
+                            showResult(message, 'error');
+                        }
+                        rfidInput.value = '';
+                        rfidInput.focus();
+                        // Reload after a brief moment to ensure database is updated
+                        setTimeout(() => {
+                            window.location.reload(true); // Force reload from server
+                        }, 300);
+                    } else {
+                        showResult('Error: ' + data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    showResult('Error: ' + error.message, 'error');
+                });
+            }
+
+            function showResult(message, type) {
+                scanResult.textContent = message;
+                scanResult.className = 'scan-result show ' + type;
+                setTimeout(() => {
+                    scanResult.classList.remove('show');
+                    rfidScanner.classList.remove('active');
+                }, 5000);
+            }
+
+            // Search functionality
+            const searchInput = document.getElementById('attendanceSearch');
+            if (searchInput) {
+                searchInput.addEventListener('input', function() {
+                    applyFilters();
+                });
+            }
+            
+            function clearFilters() {
+                document.getElementById('sessionFilter').value = 'all';
+                document.getElementById('timeTypeFilter').value = 'all';
+                document.getElementById('attendanceSearch').value = '';
+                applyFilters();
+            }
+            
+            function clearSearch() {
+                clearFilters();
+            }
+
+            function filterAttendanceTable(sessionFilter, timeTypeFilter, searchTerm) {
+                const rows = document.querySelectorAll('.attendance-row');
+                let visibleCount = 0;
+                
+                rows.forEach(row => {
+                    const section = row.closest('.attendance-section');
+                    const session = section ? section.getAttribute('data-session') : null;
+                    const typeCell = row.querySelector('td:nth-child(6)');
+                    const recordType = typeCell ? typeCell.textContent.trim() : '';
+                    const studentId = (row.getAttribute('data-student-id') || '').toLowerCase();
+                    const studentName = (row.getAttribute('data-student-name') || '').toLowerCase();
+                    const course = (row.getAttribute('data-course') || '').toLowerCase();
+                    
+                    let showRow = true;
+                    
+                    if (sessionFilter !== 'all' && session !== sessionFilter) {
+                        showRow = false;
+                    }
+                    
+                    if (timeTypeFilter !== 'all' && recordType !== timeTypeFilter) {
+                        showRow = false;
+                    }
+                    
+                    if (searchTerm && !studentId.includes(searchTerm) && !studentName.includes(searchTerm) && !course.includes(searchTerm)) {
+                        showRow = false;
+                    }
+                    
+                    row.style.display = showRow ? '' : 'none';
+                    if (showRow) visibleCount++;
+                });
+                
+                // Show/hide "no results" message if needed
+                const tables = document.querySelectorAll('.table tbody');
+                tables.forEach(tbody => {
+                    const noDataRow = tbody.querySelector('tr[colspan]');
+                    if (noDataRow && searchTerm) {
+                        noDataRow.style.display = visibleCount === 0 ? '' : 'none';
+                        if (visibleCount === 0) {
+                            noDataRow.querySelector('td').textContent = 'No records match your search.';
+                        }
+                    }
+                });
+            }
+
+            function clearSearch() {
+                if (searchInput) {
+                    searchInput.value = '';
+                    filterAttendanceTable('');
+                }
+            }
+
+            // Show More/Less toggle functionality
+            function toggleSection(session) {
+                const sectionId = session.toLowerCase() + 'Section';
+                const section = document.getElementById(sectionId);
+                const icon = document.getElementById('toggleIcon' + session);
+                const text = document.getElementById('toggleText' + session);
+                
+                if (section) {
+                    const isHidden = section.style.display === 'none';
+                    section.style.display = isHidden ? 'block' : 'none';
+                    
+                    if (icon) {
+                        icon.className = isHidden ? 'bi bi-chevron-down' : 'bi bi-chevron-up';
+                    }
+                    if (text) {
+                        text.textContent = isHidden ? 'Show Less' : 'Show More';
+                    }
+                }
+            }
+
+            // Initialize: Show all sections by default, but allow collapsing
+            document.addEventListener('DOMContentLoaded', function() {
+                // All sections visible by default
+                const sections = document.querySelectorAll('.attendance-table-section');
+                sections.forEach(section => {
+                    section.style.display = 'block';
+                });
+            });
+
+            // Filter by status function
+            function filterByStatus(status) {
+                // Hide all sections
+                document.querySelectorAll('.status-section').forEach(section => {
+                    section.style.display = 'none';
+                });
+
+                // Reset all buttons
+                document.querySelectorAll('[id^="filter"]').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.classList.contains('btn-outline-danger')) {
+                        btn.className = 'btn btn-outline-danger';
+                    } else if (btn.classList.contains('btn-outline-warning')) {
+                        btn.className = 'btn btn-outline-warning';
+                    } else if (btn.classList.contains('btn-outline-success')) {
+                        btn.className = 'btn btn-outline-success';
+                    } else {
+                        btn.className = 'btn btn-secondary';
+                    }
+                });
+
+                // Show selected section and highlight button
+                if (status === 'ABSENT') {
+                    document.getElementById('absentSection').style.display = 'block';
+                    const btn = document.getElementById('filterAbsent');
+                    btn.classList.remove('btn-outline-danger');
+                    btn.classList.add('btn-danger', 'active');
+                } else if (status === 'LATE') {
+                    document.getElementById('lateSection').style.display = 'block';
+                    const btn = document.getElementById('filterLate');
+                    btn.classList.remove('btn-outline-warning');
+                    btn.classList.add('btn-warning', 'active');
+                } else if (status === 'PRESENT') {
+                    document.getElementById('presentSection').style.display = 'block';
+                    const btn = document.getElementById('filterPresent');
+                    btn.classList.remove('btn-outline-success');
+                    btn.classList.add('btn-success', 'active');
+                } else if (status === 'ALL') {
+                    document.querySelectorAll('.status-section').forEach(section => {
+                        section.style.display = 'block';
+                    });
+                    document.getElementById('filterAll').classList.add('active');
+                }
+            }
+
+            // Prevent scanning if finalized
+            const isFinalized = /*[[${event.finalized}]]*/ false;
+            if (isFinalized) {
+                const originalScanRFID = window.scanRFID;
+                window.scanRFID = function() {
+                    alert('Event is finalized. No further attendance can be recorded.');
+                    return false;
+                };
+            }
+        </script>
+    </th:block>
+</body>
+</html>

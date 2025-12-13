@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:include="layout :: layout">
+<head>
+    <style>
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+        }
+        .modal.show {
+            display: flex;
+        }
+        .modal-content {
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            padding: var(--spacing-xl);
+            max-width: 500px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-lg);
+        }
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--dark-text);
+        }
+        .close-btn {
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: var(--dark-text);
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .close-btn:hover {
+            color: var(--error);
+        }
+    </style>
+</head>
+<body>
+    <th:block th:fragment="content">
+        <div class="page-header">
+            <h1 class="page-title">
+                <i class="bi bi-handshake"></i>
+                Community Service
+            </h1>
+            <button class="btn btn-primary" onclick="openAddModal()">
+                <i class="bi bi-plus-circle"></i>
+                Add Service Record
+            </button>
+        </div>
+
+        <div th:if="${successMessage}" class="alert alert-success">
+            <i class="bi bi-check-circle"></i>
+            <span th:text="${successMessage}"></span>
+        </div>
+        <div th:if="${infoMessage}" class="alert alert-info" style="background-color: #E3F2FD; border-left: 4px solid #2196F3; color: #1565C0;">
+            <i class="bi bi-info-circle"></i>
+            <span th:text="${infoMessage}"></span>
+        </div>
+        <div th:if="${errorMessage}" class="alert alert-error">
+            <i class="bi bi-exclamation-circle"></i>
+            <span th:text="${errorMessage}"></span>
+        </div>
+
+        <!-- Search -->
+        <div class="search-section mb-xl">
+            <form th:action="@{/community-service}" method="get" class="search-row">
+                <div class="form-group">
+                    <label class="form-label">Search By</label>
+                    <select name="searchType" class="form-select">
+                        <option value="All Fields" th:selected="${searchType == 'All Fields'}">All Fields</option>
+                        <option value="Student ID" th:selected="${searchType == 'Student ID'}">Student ID</option>
+                        <option value="Student Name" th:selected="${searchType == 'Student Name'}">Student Name</option>
+                        <option value="Service ID" th:selected="${searchType == 'Service ID'}">Service ID</option>
+                        <option value="Course" th:selected="${searchType == 'Course'}">Course</option>
+                        <option value="Year Level" th:selected="${searchType == 'Year Level'}">Year Level</option>
+                        <option value="Section" th:selected="${searchType == 'Section'}">Section</option>
+                        <option value="RFID Tag" th:selected="${searchType == 'RFID Tag'}">RFID Tag</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Query</label>
+                    <input type="text" name="search" class="form-control" th:value="${search}" placeholder="Enter search term...">
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                    <a th:href="@{/community-service}" class="btn btn-secondary" style="margin-left: var(--spacing-sm);">Clear</a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Services Table -->
+        <div class="card">
+            <div class="table-wrapper">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Service ID</th>
+                            <th>Student ID</th>
+                            <th>Student Name</th>
+                            <th>Course</th>
+                            <th>Year</th>
+                            <th>Section</th>
+                            <th>Hours</th>
+                            <th>Description</th>
+                            <th>Credit Amount</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:if="${services.isEmpty()}">
+                            <td colspan="11" style="text-align: center; padding: var(--spacing-xl); color: #6B7280;">No services found.</td>
+                        </tr>
+                        <tr th:each="service : ${services}" th:with="student=${studentMap.get(service.studID)}">
+                            <td th:text="${service.serviceID}">SVC001</td>
+                            <td th:text="${service.studID}">STUD001</td>
+                            <td th:text="${student != null ? student.fullName : service.studID}">Student Name</td>
+                            <td th:text="${student != null ? student.course : 'N/A'}">BSIT</td>
+                            <td th:text="${student != null ? student.yearLevel : 'N/A'}">1</td>
+                            <td th:text="${student != null ? student.section : 'N/A'}">A</td>
+                            <td th:text="${service.hoursRendered}">1</td>
+                            <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" 
+                                th:text="${service.description != null and !#strings.isEmpty(service.description) ? service.description : 'N/A'}" 
+                                th:title="${service.description != null ? service.description : ''}">N/A</td>
+                            <td style="font-weight: 600; color: var(--success);" th:text="'₱' + ${#numbers.formatDecimal(service.creditAmount, 1, 2)}">₱0.00</td>
+                            <td th:text="${#temporals.format(service.date, 'yyyy-MM-dd')}">2025-01-01</td>
+                            <td>
+                                <form th:action="@{/community-service/delete/{id}(id=${service.serviceID})}" method="post" style="display: inline;"
+                                      onsubmit="return confirm('Delete this service record?');">
+                                    <button type="submit" class="btn btn-sm btn-danger">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Add Service Modal -->
+        <div id="addModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 class="modal-title">Record Community Service</h3>
+                    <button class="close-btn" onclick="closeAddModal()">&times;</button>
+                </div>
+                <form th:action="@{/community-service/save}" method="post">
+                    <div class="form-group" style="position: relative;">
+                        <label class="form-label">Student <span style="color: var(--error);">*</span></label>
+                        <input type="text" id="studentSearchModal" class="form-control" 
+                               placeholder="Search by Student ID, Name, or RFID..." 
+                               autocomplete="off" required>
+                        <input type="hidden" name="studentId" id="studentIdModal" required>
+                        <div id="studentDropdownModal" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 1001; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 2px;">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Hours <span style="color: var(--error);">*</span></label>
+                        <input type="number" name="hours" id="hoursInput" class="form-control" min="1" value="1" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Description / Type of Service</label>
+                        <textarea name="description" class="form-control" rows="3" 
+                                  placeholder="e.g., Campus cleanup, Library assistance, Event setup..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Date <span style="color: var(--error);">*</span></label>
+                        <input type="date" name="date" class="form-control" th:value="${today}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Credit Amount (Auto-calculated)</label>
+                        <input type="text" id="creditAmount" class="form-control" readonly value="₱50.00" style="background: var(--accent);">
+                        <small style="color: #6B7280;">Rate: ₱50.00 per hour</small>
+                    </div>
+                    <div style="display: flex; justify-content: flex-end; gap: var(--spacing-md); margin-top: var(--spacing-lg);">
+                        <button type="button" class="btn btn-secondary" onclick="closeAddModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-save"></i>
+                            Save
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <script>
+            function openAddModal() {
+                document.getElementById('addModal').classList.add('show');
+                document.getElementById('studentSelect').focus();
+            }
+
+            function closeAddModal() {
+                document.getElementById('addModal').classList.remove('show');
+            }
+
+            // Close modal when clicking outside
+            document.getElementById('addModal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeAddModal();
+                }
+            });
+
+            // Auto-calculate credit amount
+            document.getElementById('hoursInput')?.addEventListener('input', function() {
+                const hours = parseInt(this.value) || 0;
+                const creditPerHour = 50;
+                const totalCredit = hours * creditPerHour;
+                document.getElementById('creditAmount').value = '₱' + totalCredit.toFixed(2);
+            });
+
+            // Student search for modal
+            const studentSearchModal = document.getElementById('studentSearchModal');
+            const studentIdModal = document.getElementById('studentIdModal');
+            const studentDropdownModal = document.getElementById('studentDropdownModal');
+            let searchTimeoutModal;
+
+            studentSearchModal.addEventListener('input', function() {
+                const query = this.value.trim();
+                
+                clearTimeout(searchTimeoutModal);
+                
+                if (query.length < 2) {
+                    studentDropdownModal.style.display = 'none';
+                    studentIdModal.value = '';
+                    return;
+                }
+                
+                searchTimeoutModal = setTimeout(() => {
+                    fetch('/students/search?query=' + encodeURIComponent(query))
+                        .then(response => response.json())
+                        .then(data => {
+                            studentDropdownModal.innerHTML = '';
+                            if (data.length === 0) {
+                                studentDropdownModal.innerHTML = '<div style="padding: 10px; color: #666;">No students found</div>';
+                                studentDropdownModal.style.display = 'block';
+                            } else {
+                                data.forEach(student => {
+                                    const div = document.createElement('div');
+                                    div.style.padding = '10px';
+                                    div.style.cursor = 'pointer';
+                                    div.style.borderBottom = '1px solid #eee';
+                                    div.textContent = student.display;
+                                    div.addEventListener('mouseenter', function() {
+                                        this.style.background = '#f5f5f5';
+                                    });
+                                    div.addEventListener('mouseleave', function() {
+                                        this.style.background = 'white';
+                                    });
+                                    div.addEventListener('click', function() {
+                                        studentSearchModal.value = student.display;
+                                        studentIdModal.value = student.studID;
+                                        studentDropdownModal.style.display = 'none';
+                                    });
+                                    studentDropdownModal.appendChild(div);
+                                });
+                                studentDropdownModal.style.display = 'block';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error searching students:', error);
+                        });
+                }, 300);
+            });
+
+            // Close dropdown when clicking outside
+            document.addEventListener('click', function(e) {
+                if (!studentSearchModal.contains(e.target) && !studentDropdownModal.contains(e.target)) {
+                    studentDropdownModal.style.display = 'none';
+                }
+            });
+        </script>
+    </th:block>
+</body>
+</html>

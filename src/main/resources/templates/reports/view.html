@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:include="layout :: layout">
+<body>
+    <th:block th:fragment="content">
+        <div class="page-header">
+            <h1 class="page-title">
+                <i class="bi bi-graph-up-arrow"></i>
+                Transparency Report
+            </h1>
+            <a th:href="@{/reports}" class="btn btn-secondary">
+                <i class="bi bi-arrow-clockwise"></i>
+                Refresh
+            </a>
+        </div>
+
+        <!-- Filter -->
+        <div class="search-section mb-xl">
+            <form th:action="@{/reports}" method="get" style="display: flex; gap: var(--spacing-md); align-items: end;">
+                <div class="form-group" style="width: 150px;">
+                    <label class="form-label">Year</label>
+                    <select name="year" class="form-select">
+                        <option th:each="y : ${availableYears}"
+                                th:value="${y}" th:text="${y}" th:selected="${year != null && year == y}">
+                            2025
+                        </option>
+                    </select>
+                </div>
+                <div class="form-group" style="width: 150px;">
+                    <label class="form-label">Semester</label>
+                    <select name="semester" class="form-select">
+                        <option value="1" th:selected="${semester == 1}">1</option>
+                        <option value="2" th:selected="${semester == 2}">2</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <button type="submit" class="btn btn-primary">Apply Filter</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid mb-xl">
+            <div class="stat-card">
+                <div class="stat-label">This Month</div>
+                <div class="stat-value primary" th:text="'₱' + ${#numbers.formatDecimal(monthly, 1, 2)}">₱0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">This Semester</div>
+                <div class="stat-value primary" th:text="'₱' + ${#numbers.formatDecimal(semesterTotal, 1, 2)}">₱0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">This Year</div>
+                <div class="stat-value primary" th:text="'₱' + ${#numbers.formatDecimal(yearly, 1, 2)}">₱0.00</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">All Time</div>
+                <div class="stat-value" th:text="'₱' + ${#numbers.formatDecimal(allTime, 1, 2)}">₱0.00</div>
+            </div>
+        </div>
+
+        <!-- Community Service Stats Grid -->
+        <div class="card mb-xl">
+            <div class="card-header">
+                <h3 class="card-title">Community Service Statistics</h3>
+            </div>
+            <div class="card-body">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Today's Hours</div>
+                        <div class="stat-value success" th:text="${dailyServiceHours}">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">This Month Hours</div>
+                        <div class="stat-value success" th:text="${monthlyServiceHours}">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">This Semester Hours</div>
+                        <div class="stat-value success" th:text="${semesterServiceHours}">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">This Year Hours</div>
+                        <div class="stat-value success" th:text="${yearlyServiceHours}">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Hours (All Time)</div>
+                        <div class="stat-value success" th:text="${totalServiceHours}">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Total Credits Value</div>
+                        <div class="stat-value success" th:text="'₱' + ${#numbers.formatDecimal(totalServiceCredits, 1, 2)}">₱0.00</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Monthly Credits Value</div>
+                        <div class="stat-value success" th:text="'₱' + ${#numbers.formatDecimal(monthlyServiceCredits, 1, 2)}">₱0.00</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Contributors -->
+        <div class="card mb-xl" th:if="${!topContributors.isEmpty()}">
+            <div class="card-header">
+                <h3 class="card-title">Top 10 Community Service Contributors</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-wrapper">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Student ID</th>
+                                <th>Student Name</th>
+                                <th>Total Hours</th>
+                                <th>Total Credits</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="contributor, iterStat : ${topContributors}">
+                                <td th:text="${iterStat.index + 1}">1</td>
+                                <td th:text="${contributor.studID}">STUD001</td>
+                                <td th:text="${contributor.studentName}">Student Name</td>
+                                <td th:text="${contributor.totalHours}">0</td>
+                                <td style="font-weight: 600; color: var(--success);" 
+                                    th:text="'₱' + ${#numbers.formatDecimal(contributor.totalCredits, 1, 2)}">₱0.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Breakdown by Course/Year/Section -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: var(--spacing-xl); margin-bottom: var(--spacing-xl);">
+            <!-- By Course -->
+            <div class="card" th:if="${!serviceHoursByCourse.isEmpty()}">
+                <div class="card-header">
+                    <h3 class="card-title">Hours by Course</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-wrapper">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Course</th>
+                                    <th>Hours</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="entry : ${serviceHoursByCourse}">
+                                    <td th:text="${entry.key}">BSIT</td>
+                                    <td th:text="${entry.value}">0</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- By Year Level -->
+            <div class="card" th:if="${!serviceHoursByYear.isEmpty()}">
+                <div class="card-header">
+                    <h3 class="card-title">Hours by Year Level</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-wrapper">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Year</th>
+                                    <th>Hours</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="entry : ${serviceHoursByYear}">
+                                    <td th:text="${entry.key}">1</td>
+                                    <td th:text="${entry.value}">0</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- By Section -->
+            <div class="card" th:if="${!serviceHoursBySection.isEmpty()}">
+                <div class="card-header">
+                    <h3 class="card-title">Hours by Section</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-wrapper">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Section</th>
+                                    <th>Hours</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="entry : ${serviceHoursBySection}">
+                                    <td th:text="${entry.key}">A</td>
+                                    <td th:text="${entry.value}">0</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Report Table -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Detailed Report</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-wrapper">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Period</th>
+                                <th>Collections</th>
+                                <th>Fines Issued</th>
+                                <th>Net Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>This Month</td>
+                                <td th:text="'₱' + ${#numbers.formatDecimal(monthly, 1, 2)}">₱0.00</td>
+                                <td th:text="'₱' + ${#numbers.formatDecimal(allTime, 1, 2)}">₱0.00</td>
+                                <td th:text="'₱' + ${#numbers.formatDecimal(monthly, 1, 2)}">₱0.00</td>
+                            </tr>
+                            <tr>
+                                <td>This Semester</td>
+                                <td th:text="'₱' + ${#numbers.formatDecimal(semesterTotal, 1, 2)}">₱0.00</td>
+                                <td th:text="'₱' + ${#numbers.formatDecimal(allTime, 1, 2)}">₱0.00</td>
+                                <td th:text="'₱' + ${#numbers.formatDecimal(semesterTotal, 1, 2)}">₱0.00</td>
+                            </tr>
+                            <tr>
+                                <td>This Year</td>
+                                <td th:text="'₱' + ${#numbers.formatDecimal(yearly, 1, 2)}">₱0.00</td>
+                                <td th:text="'₱' + ${#numbers.formatDecimal(allTime, 1, 2)}">₱0.00</td>
+                                <td th:text="'₱' + ${#numbers.formatDecimal(yearly, 1, 2)}">₱0.00</td>
+                            </tr>
+                            <tr>
+                                <td>All Time</td>
+                                <td th:text="'₱' + ${#numbers.formatDecimal(allTime, 1, 2)}">₱0.00</td>
+                                <td th:text="'₱' + ${#numbers.formatDecimal(allTime, 1, 2)}">₱0.00</td>
+                                <td th:text="'₱' + ${#numbers.formatDecimal(allTime, 1, 2)}">₱0.00</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </th:block>
+</body>
+</html>
